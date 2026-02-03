@@ -1,0 +1,3128 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+  ゲーム要件:
+  - プレイヤーキャラクターを画像に変更（3Dオブジェクトのテクスチャとして使用）
+  - 体力（HP）バーの実装
+  - レベルアップ（ボス挑戦）までのメーター実装
+  - レベルアップ時に最大HPと攻撃力（パワー）が増加する機能
+  - スタート画面の実装
+  - 管理者コマンド（デバッグ機能）の実装
+  - 管理者機能へのパスワード保護（Pass: 9307676）
+  - パスワード入力時に数字キーボードを表示
+  - レベル上限の拡張（Lv.1000まで）
+  - 毎時0分から5分間の「ダイヤイベント」実装（リアルタイム連動）
+  - 管理者機能の拡張（イベント強制開始、課金石追加、イベント時間延長機能）
+  - キャラクター変更機能の実装（ボタンで切り替え）
+    - キャラクター選択画面をWikipedia風のデザインに変更
+    - リストからキャラクターを選択して変更可能にする
+  - ボスのバリエーション追加（レベルに応じて見た目が変化）
+  - KAWAII/ゆめかわいい世界観（パステルカラー、丸いフォルム）
+  - モバイル縦画面、タッチ操作
+  - 効果音（SE）の実装（Web Audio API使用）
+  - オンライン協力モードの実装（常時解放、マッチング機能付き）
+  - ダイヤイベントパスの実装
+    - Lv.1〜9で課金ダイヤ（👑）獲得
+    - Lv.10で限定キャラクター獲得
+    - クエスト（敵撃破など）でパスXPを獲得してレベルアップ
+  - 限定キャラクター「ギャラクシー・ボイジャー」の実装
+  - プレイ画面を3Dワールド化
+  - キャラクター、敵、ボスを3Dモデル（プリミティブ+テクスチャ）化
+  - 一人称（FPS）/三人称（TPS）視点切り替え機能
+  - 攻撃ボタン（近接）、射撃ボタン（遠距離）の実装（オート攻撃廃止）
+  - ジャンプ機能の実装
+  - ダイヤイベントパスボタンの配置変更（左側メニューへ）
+  - レベル上げの難易度調整（必要XP増加）
+  - 攻撃ボタンの攻撃を刀（剣）攻撃に変更
+    - プレイヤーに3Dの刀を持たせる
+    - 攻撃時に刀を振るアニメーションを追加
+  - ワールド2の実装
+    - レベル100から入場可能
+    - ワールド2へのゲートを追加
+    - ワールド2は「闇に染まった」フィールド（病みかわいい/ゴシック）
+    - [NEW] ワールド1に戻るゲートを追加
+    - [NEW] ワールド2に墓石、遺跡、棘などのオブジェクトを多数追加
+    - [NEW] ワールド2の敵を「最強」に強化（HP大幅増、攻撃力100固定）
+  -->
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="screen-orientation" content="portrait">
+  <title>村人対決tv</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: #87CEEB; /* Sky Blue */
+      font-family: "M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", sans-serif;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* UI Overlay */
+    #ui-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    /* Status Bars */
+    .status-bars {
+      width: 100%;
+      margin-bottom: 10px;
+    }
+
+    .bar-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 5px;
+    }
+
+    .bar-label {
+      width: 50px;
+      font-weight: bold;
+      color: #FF69B4;
+      text-shadow: 1px 1px 0 #FFF;
+      font-size: 14px;
+    }
+
+    .bar-bg {
+      flex-grow: 1;
+      height: 12px;
+      background: rgba(255, 255, 255, 0.5);
+      border-radius: 6px;
+      border: 2px solid #FFF;
+      overflow: hidden;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      position: relative;
+    }
+
+    .bar-fill {
+      height: 100%;
+      width: 100%;
+      transition: width 0.2s ease-out;
+    }
+
+    .hp-fill { background: linear-gradient(to right, #FF69B4, #FF1493); }
+    .exp-fill { background: linear-gradient(to right, #4ECDC4, #20B2AA); }
+
+    .bar-text {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: #555;
+      font-weight: bold;
+      text-shadow: 0 0 2px #FFF;
+    }
+
+    /* Header Stats */
+    .header {
+      padding: 15px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+      background: linear-gradient(to bottom, rgba(255,255,255,0.8), transparent);
+    }
+
+    .stat-row {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: bold;
+      color: #FF69B4;
+      text-shadow: 2px 2px 0 #FFF;
+      font-size: 18px;
+    }
+
+    .resource-box {
+      background: rgba(255, 255, 255, 0.9);
+      padding: 8px 16px;
+      border-radius: 20px;
+      border: 3px solid #FF69B4;
+      box-shadow: 0 4px 0 rgba(255, 105, 180, 0.3);
+      min-width: 100px;
+      text-align: center;
+    }
+
+    .diamond-box {
+      border-color: #4ECDC4;
+      color: #4ECDC4;
+      box-shadow: 0 4px 0 rgba(78, 205, 196, 0.3);
+    }
+
+    /* Boss Timer */
+    #boss-timer-container {
+      position: absolute;
+      top: 120px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 80%;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    #boss-timer-bar-bg {
+      width: 100%;
+      height: 20px;
+      background: #FFF;
+      border-radius: 10px;
+      border: 2px solid #FF69B4;
+      overflow: hidden;
+    }
+
+    #boss-timer-bar {
+      width: 100%;
+      height: 100%;
+      background: #FF69B4;
+      transition: width 0.1s linear;
+    }
+
+    #boss-timer-text {
+      color: #FF1493;
+      font-weight: bold;
+      font-size: 20px;
+      margin-bottom: 5px;
+      text-shadow: 1px 1px 0 #FFF;
+    }
+
+    /* Controls Area */
+    .controls {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      align-items: center;
+      pointer-events: auto;
+      background: linear-gradient(to top, rgba(255,240,245,0.9) 20%, transparent);
+      padding-bottom: 40px;
+    }
+
+    /* Buttons */
+    .btn {
+      background: #FFF;
+      border: none;
+      border-radius: 50px;
+      padding: 15px 30px;
+      font-size: 18px;
+      font-weight: bold;
+      color: #555;
+      box-shadow: 0 6px 0 #DDD, 0 10px 10px rgba(0,0,0,0.1);
+      transition: transform 0.1s, box-shadow 0.1s;
+      width: 90%;
+      max-width: 350px;
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      touch-action: manipulation;
+    }
+
+    .btn:active {
+      transform: translateY(4px);
+      box-shadow: 0 2px 0 #DDD, 0 4px 4px rgba(0,0,0,0.1);
+    }
+
+    .btn:disabled {
+      background: #CCC;
+      color: #888;
+      box-shadow: none;
+      transform: none;
+    }
+
+    .btn-gacha {
+      background: #E0FFFF;
+      border: 4px solid #4ECDC4;
+      color: #008B8B;
+      box-shadow: 0 6px 0 #20B2AA, 0 10px 10px rgba(0,0,0,0.1);
+    }
+    .btn-gacha:active {
+      box-shadow: 0 2px 0 #20B2AA, 0 4px 4px rgba(0,0,0,0.1);
+    }
+
+    .btn-boss {
+      background: #FFF0F5;
+      border: 4px solid #FF69B4;
+      color: #C71585;
+      box-shadow: 0 6px 0 #DB7093, 0 10px 10px rgba(0,0,0,0.1);
+      display: none;
+    }
+    .btn-boss:active {
+      box-shadow: 0 2px 0 #DB7093, 0 4px 4px rgba(0,0,0,0.1);
+    }
+
+    .cost-badge {
+      background: rgba(0,0,0,0.1);
+      padding: 4px 10px;
+      border-radius: 15px;
+      font-size: 14px;
+    }
+
+    /* Floating Text */
+    .floating-text {
+      position: absolute;
+      pointer-events: none;
+      font-weight: bold;
+      animation: floatUp 1s ease-out forwards;
+      text-shadow: 2px 2px 0 #FFF;
+      z-index: 20;
+      white-space: nowrap;
+    }
+
+    @keyframes floatUp {
+      0% { transform: translateY(0) scale(1); opacity: 1; }
+      100% { transform: translateY(-100px) scale(1.5); opacity: 0; }
+    }
+
+    /* Joystick Zone */
+    #joystick-zone {
+      position: absolute;
+      width: 120px;
+      height: 120px;
+      z-index: 5;
+      display: none;
+      border: 2px dashed rgba(255, 105, 180, 0.3);
+      border-radius: 50%;
+      pointer-events: none;
+      opacity: 0.8;
+    }
+    
+    .joystick-knob {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 50px;
+      height: 50px;
+      background: rgba(255, 105, 180, 0.5);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 10px rgba(255, 105, 180, 0.5);
+    }
+
+    .save-load-btns {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      display: flex;
+      gap: 5px;
+      pointer-events: auto;
+    }
+    
+    .btn-mini {
+      background: #FFF;
+      border: 2px solid #FF69B4;
+      border-radius: 10px;
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: bold;
+      color: #FF69B4;
+      cursor: pointer;
+      box-shadow: 0 2px 0 #DB7093;
+      touch-action: manipulation;
+    }
+    .btn-mini:active {
+      transform: translateY(2px);
+      box-shadow: none;
+    }
+
+    .left-side-menu {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      pointer-events: auto;
+      z-index: 50;
+    }
+
+    /* Action Buttons */
+    .action-buttons {
+      position: absolute;
+      bottom: 120px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      align-items: flex-end;
+      pointer-events: auto;
+      z-index: 60;
+    }
+
+    .btn-action {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      border: 4px solid #FFF;
+      font-size: 28px;
+      font-weight: bold;
+      color: #FFF;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      cursor: pointer;
+      transition: transform 0.1s;
+      touch-action: manipulation;
+    }
+    .btn-action:active { transform: scale(0.9); }
+    .btn-attack { background: #FF4500; border-color: #FFD700; width: 80px; height: 80px; font-size: 32px; }
+    .btn-shoot { background: #1E90FF; border-color: #87CEFA; }
+    .btn-jump { background: #32CD32; border-color: #98FB98; }
+
+    /* Shop Modal */
+    #shop-modal {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 80%;
+      max-width: 300px;
+      background: rgba(255, 255, 255, 0.95);
+      border: 4px solid #FFD700;
+      border-radius: 20px;
+      padding: 20px;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      z-index: 150;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+    #shop-modal h2 {
+      color: #FFD700;
+      margin: 0 0 15px 0;
+      text-shadow: 1px 1px 0 #FFF;
+    }
+    .shop-info {
+      font-size: 14px;
+      color: #555;
+      margin-bottom: 15px;
+      text-align: center;
+    }
+    .shop-currency {
+      font-size: 20px;
+      font-weight: bold;
+      color: #FFD700;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .btn-buy {
+      background: #FFF;
+      border: 2px solid #FFD700;
+      color: #DAA520;
+      width: 100%;
+      margin-bottom: 10px;
+      padding: 10px;
+      border-radius: 10px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 4px 0 #B8860B;
+    }
+    .btn-buy:active {
+      transform: translateY(2px);
+      box-shadow: 0 2px 0 #B8860B;
+    }
+    .btn-close {
+      background: #EEE;
+      border: 2px solid #CCC;
+      color: #555;
+      padding: 8px 20px;
+      border-radius: 15px;
+      cursor: pointer;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+
+    /* Pass Modal */
+    #pass-modal {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 85%;
+      max-width: 320px;
+      height: 70%;
+      background: #FFF;
+      border: 4px solid #4ECDC4;
+      border-radius: 20px;
+      display: none;
+      flex-direction: column;
+      z-index: 155;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      overflow: hidden;
+    }
+    .pass-header {
+      background: #4ECDC4;
+      padding: 15px;
+      text-align: center;
+      color: #FFF;
+      font-weight: bold;
+      text-shadow: 1px 1px 0 rgba(0,0,0,0.2);
+    }
+    .pass-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      background: #F0FFFF;
+    }
+    .pass-status {
+      background: #FFF;
+      padding: 10px;
+      border-radius: 10px;
+      margin-bottom: 15px;
+      border: 2px solid #E0E0E0;
+      text-align: center;
+    }
+    .pass-level-row {
+      display: flex;
+      align-items: center;
+      background: #FFF;
+      margin-bottom: 8px;
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid #DDD;
+    }
+    .pass-level-row.completed {
+      background: #E0FFE0;
+      border-color: #90EE90;
+    }
+    .pass-level-num {
+      width: 40px;
+      font-weight: bold;
+      color: #555;
+    }
+    .pass-reward {
+      flex: 1;
+      font-size: 14px;
+      color: #333;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .pass-check {
+      width: 24px;
+      text-align: center;
+      font-size: 18px;
+    }
+
+    /* Admin Modal */
+    #admin-modal {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 80%;
+      max-width: 300px;
+      background: rgba(50, 50, 50, 0.95);
+      border: 4px solid #000;
+      border-radius: 20px;
+      padding: 20px;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      z-index: 160;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      color: #FFF;
+    }
+    #admin-modal h2 {
+      margin: 0 0 15px 0;
+      text-shadow: 1px 1px 0 #000;
+    }
+    .btn-admin-action {
+      background: #FFF;
+      border: 2px solid #000;
+      color: #000;
+      width: 100%;
+      margin-bottom: 10px;
+      padding: 10px;
+      border-radius: 10px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 4px 0 #333;
+    }
+    .btn-admin-action:active {
+      transform: translateY(2px);
+      box-shadow: 0 2px 0 #333;
+    }
+
+    /* Password Modal */
+    #password-modal {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 80%;
+      max-width: 300px;
+      background: rgba(255, 255, 255, 0.95);
+      border: 4px solid #333;
+      border-radius: 20px;
+      padding: 20px;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      z-index: 250;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+    #password-modal h2 {
+      margin: 0 0 15px 0;
+      color: #333;
+      font-size: 20px;
+    }
+
+    input.numeric-password {
+      -webkit-text-security: disc;
+      -webkit-user-select: text;
+      user-select: text;
+    }
+
+    /* Wiki Style Character Select Modal */
+    #wiki-modal {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #FFF;
+      z-index: 400;
+      display: none;
+      flex-direction: column;
+      color: #202122;
+      font-family: sans-serif;
+      overflow: hidden;
+    }
+
+    .wiki-header {
+      background: #f8f9fa;
+      border-bottom: 1px solid #a2a9b1;
+      padding: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .wiki-logo {
+      font-family: 'Times New Roman', serif;
+      font-size: 20px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .wiki-logo span {
+      font-size: 24px;
+    }
+
+    .wiki-search-bar {
+      background: #fff;
+      border: 1px solid #a2a9b1;
+      padding: 5px 10px;
+      border-radius: 2px;
+      color: #72777d;
+      font-size: 12px;
+      width: 100px;
+      text-align: left;
+    }
+
+    .wiki-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 15px;
+      background: #FFF;
+    }
+
+    .wiki-title {
+      font-family: 'Times New Roman', serif;
+      font-size: 28px;
+      border-bottom: 1px solid #a2a9b1;
+      padding-bottom: 5px;
+      margin-bottom: 15px;
+      font-weight: normal;
+    }
+
+    .wiki-subtitle {
+      font-size: 14px;
+      color: #54595d;
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+
+    .wiki-list {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .wiki-entry {
+      border: 1px solid #a2a9b1;
+      background: #f8f9fa;
+      padding: 10px;
+      display: flex;
+      gap: 15px;
+      align-items: flex-start;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .wiki-entry:active {
+      background: #e8e9ea;
+    }
+
+    .wiki-entry.selected {
+      background: #e6f7ff;
+      border-color: #3399ff;
+      border-left: 5px solid #3399ff;
+    }
+    
+    .wiki-entry.locked {
+      opacity: 0.6;
+      cursor: not-allowed;
+      background: #EEE;
+    }
+
+    .wiki-thumb {
+      width: 80px;
+      height: 80px;
+      background: #FFF;
+      border: 1px solid #c8ccd1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .wiki-thumb img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+
+    .wiki-info {
+      flex: 1;
+    }
+
+    .wiki-name {
+      font-weight: bold;
+      font-size: 16px;
+      margin-bottom: 5px;
+      color: #3366cc;
+    }
+
+    .wiki-desc {
+      font-size: 12px;
+      color: #202122;
+      line-height: 1.4;
+    }
+
+    .wiki-footer {
+      padding: 15px;
+      border-top: 1px solid #a2a9b1;
+      background: #f8f9fa;
+      text-align: center;
+      font-size: 10px;
+      color: #54595d;
+    }
+
+    .btn-wiki-close {
+      background: #3366cc;
+      color: #FFF;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 2px;
+      font-weight: bold;
+      font-size: 14px;
+      margin-left: auto;
+    }
+
+    /* Start Screen */
+    #start-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(135, 206, 235, 0.95);
+      z-index: 300;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+    }
+
+    .game-title {
+      font-size: 40px;
+      color: #FF69B4;
+      text-shadow: 3px 3px 0 #FFF;
+      margin-bottom: 40px;
+      line-height: 1.2;
+      animation: floatTitle 2s ease-in-out infinite;
+    }
+
+    @keyframes floatTitle {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+
+    .btn-start {
+      background: #FF1493;
+      color: #FFF;
+      border: 4px solid #FFF;
+      box-shadow: 0 6px 0 #C71585, 0 10px 20px rgba(0,0,0,0.2);
+      font-size: 24px;
+      width: auto;
+      min-width: 200px;
+      justify-content: center;
+    }
+    .btn-start:active {
+      box-shadow: 0 2px 0 #C71585;
+    }
+
+    .btn-online {
+      background: #4169E1; /* RoyalBlue */
+      color: #FFF;
+      border: 4px solid #FFF;
+      box-shadow: 0 6px 0 #191970, 0 10px 20px rgba(0,0,0,0.2);
+      font-size: 24px;
+      width: auto;
+      min-width: 200px;
+      justify-content: center;
+      margin-top: 15px;
+    }
+    .btn-online:active {
+      box-shadow: 0 2px 0 #191970;
+    }
+
+    .instructions {
+      margin-top: 20px;
+      color: #888;
+      font-weight: bold;
+    }
+
+    #game-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    /* Notification Toast */
+    #notification-toast {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.8);
+      color: #FFF;
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-weight: bold;
+      z-index: 1000;
+      display: none;
+      text-align: center;
+      border: 2px solid #FF69B4;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+
+  </style>
+</head>
+<body>
+
+  <!-- Start Screen -->
+  <div id="start-screen">
+    <h1 class="game-title">村人対決tv</h1>
+    <button id="btn-start" class="btn btn-start">ひとりで遊ぶ</button>
+    <button id="btn-online" class="btn btn-online">オンライン協力</button>
+    <button id="btn-start-load" class="btn btn-online" style="background: #9370DB; border-color: #FFF; margin-top: 15px; box-shadow: 0 6px 0 #4B0082, 0 10px 20px rgba(0,0,0,0.2);">続きから遊ぶ</button>
+    <p class="instructions">Swipe to Move • Tap Buttons to Attack</p>
+  </div>
+
+  <!-- Game Canvas Container -->
+  <div id="game-container"></div>
+
+  <!-- Notification Toast -->
+  <div id="notification-toast"></div>
+
+  <!-- UI Layer -->
+  <div id="ui-layer">
+    <div class="left-side-menu">
+      <button id="btn-pass" class="btn-mini" style="border-color: #4ECDC4; color: #008B8B; background: #E0FFFF;">🎫 PASS</button>
+      <button id="btn-change-char" class="btn-mini" style="border-color: #9370DB; color: #9370DB;">👤 CHARA</button>
+      <button id="btn-inventory" class="btn-mini" style="border-color: #8B4513; color: #8B4513; background: #FFE4B5;">🎒 ITEM</button>
+      <button id="btn-shop" class="btn-mini" style="border-color: #FFD700; color: #DAA520;">🛒 SHOP</button>
+      <button id="btn-admin" class="btn-mini" style="border-color: #333; color: #333;">🔧 ADMIN</button>
+      <button id="btn-camera-switch" class="btn-mini" style="border-color: #FFF; color: #FFF; background: #333;">🎥 VIEW: TPS</button>
+    </div>
+    <div class="save-load-btns">
+      <button id="btn-save" class="btn-mini">💾 SAVE</button>
+      <button id="btn-load" class="btn-mini">📂 LOAD</button>
+    </div>
+    <div class="header">
+      <div class="status-bars">
+        <div class="bar-row">
+          <span class="bar-label">NEXT</span>
+          <div class="bar-bg">
+            <div id="exp-bar" class="bar-fill exp-fill" style="width: 0%"></div>
+            <div id="exp-text" class="bar-text">0 / 20</div>
+          </div>
+        </div>
+      </div>
+      <div class="stat-row">
+        <span style="font-size: 20px;">Lv.<span id="level-display">1</span></span>
+        <div class="resource-box">
+          💎 <span id="emerald-display">0</span>
+        </div>
+      </div>
+      <div class="stat-row">
+        <div class="resource-box diamond-box">
+          🔷 <span id="diamond-display">0</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="boss-timer-container">
+      <div id="boss-timer-text">BOSS TIME!</div>
+      <div id="boss-timer-bar-bg">
+        <div id="boss-timer-bar"></div>
+      </div>
+    </div>
+
+    <div id="joystick-zone">
+      <div class="joystick-knob" id="joystick-knob"></div>
+    </div>
+
+    <div class="action-buttons">
+      <button id="btn-action-jump" class="btn-action btn-jump">⤴️</button>
+      <button id="btn-action-shoot" class="btn-action btn-shoot">🔫</button>
+      <button id="btn-action-attack" class="btn-action btn-attack">⚔️</button>
+    </div>
+
+    <div class="controls">
+      <div class="bar-row" style="width: 90%; max-width: 350px; margin-bottom: 0;">
+        <span class="bar-label" style="font-size: 18px;">HP</span>
+        <div class="bar-bg" style="height: 20px; border-width: 3px;"><div id="hp-bar" class="bar-fill hp-fill"></div></div>
+      </div>
+      <button id="btn-boss" class="btn btn-boss">
+        <span>⚔️ BOSS FIGHT!</span>
+        <span class="cost-badge">Lv UP</span>
+      </button>
+      
+      <button id="btn-crate" class="btn btn-gacha" style="background: #FFE4B5; border-color: #DAA520; color: #8B4513;">
+        <span>📦 クレートを開ける</span>
+        <span class="cost-badge" id="crate-count-display">x0</span>
+      </button>
+    </div>
+
+    <div id="event-banner" style="display: none; position: absolute; top: 80px; width: 100%; text-align: center; color: #4ECDC4; font-weight: bold; font-size: 24px; text-shadow: 2px 2px 0 #FFF; z-index: 20; animation: pulse 1s infinite;">
+      💎 DIAMOND RUSH! 💎
+    </div>
+    
+    <div id="event-countdown" style="position: absolute; bottom: 10px; right: 10px; color: #4ECDC4; font-weight: bold; font-size: 16px; text-shadow: 1px 1px 0 #FFF; display: none; pointer-events: none;">
+      EVENT: <span id="event-timer">00:00</span>
+    </div>
+  </div>
+
+  <!-- Shop Modal -->
+  <div id="shop-modal">
+    <h2>PREMIUM SHOP</h2>
+    <div class="shop-currency">
+      👑 <span id="paid-diamond-display">0</span>
+    </div>
+    <div class="shop-info">
+      <p>Get 👑 by defeating:<br>2 Bosses or 50 Enemies</p>
+    </div>
+    <button id="btn-buy-level" class="btn-buy">
+      LEVEL UP!<br><span style="font-size:12px">(Cost: 1 👑)</span>
+    </button>
+    <button id="btn-close-shop" class="btn-close">CLOSE</button>
+  </div>
+
+  <!-- Inventory Modal -->
+  <div id="inventory-modal" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; max-width: 300px; background: #FFF; border: 4px solid #8B4513; border-radius: 20px; padding: 20px; flex-direction: column; align-items: center; z-index: 155; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+    <h2 style="color: #8B4513; margin: 0 0 15px 0; text-shadow: 1px 1px 0 #FFF;">INVENTORY</h2>
+    <button id="btn-open-relic-equip" class="btn-buy" style="border-color: #FF69B4; color: #C71585; background: #FFF0F5; margin-bottom: 15px;">
+      🏆 レリクス装備
+    </button>
+    <button id="btn-close-inventory" class="btn-close">CLOSE</button>
+  </div>
+
+  <!-- Pass Modal -->
+  <div id="pass-modal">
+    <div class="pass-header">
+      DIAMOND EVENT PASS
+    </div>
+    <div class="pass-content">
+      <div class="pass-status">
+        <div style="font-size: 12px; color: #888;">CURRENT LEVEL</div>
+        <div style="font-size: 32px; font-weight: bold; color: #4ECDC4;">Lv.<span id="pass-level-display">1</span></div>
+        <div style="margin-top: 5px; font-size: 12px; color: #555;">
+          XP: <span id="pass-xp-display">0</span> / <span id="pass-max-xp-display">20</span>
+        </div>
+        <div class="bar-bg" style="height: 8px; margin-top: 5px;">
+          <div id="pass-xp-bar" class="bar-fill exp-fill" style="width: 0%"></div>
+        </div>
+        <div style="margin-top: 10px; font-size: 12px; color: #FF69B4; font-weight: bold;">
+          QUEST: 敵を倒してXPゲット！
+        </div>
+      </div>
+      <div id="pass-list">
+        <!-- Generated by JS -->
+      </div>
+    </div>
+    <div style="padding: 10px; text-align: center; border-top: 1px solid #EEE;">
+      <button id="btn-close-pass" class="btn-close" style="margin: 0; width: 100%;">CLOSE</button>
+    </div>
+  </div>
+
+  <!-- Admin Modal -->
+  <div id="admin-modal">
+    <h2>ADMIN MENU</h2>
+    <button id="btn-admin-levelup" class="btn-admin-action">FORCE LEVEL UP</button>
+    <button id="btn-admin-levelup-100" class="btn-admin-action">LEVEL UP +100</button>
+    <button id="btn-admin-event" class="btn-admin-action">TOGGLE EVENT</button>
+    <button id="btn-admin-extend-event" class="btn-admin-action">EXTEND EVENT (+5m)</button>
+    <button id="btn-admin-add-gem" class="btn-admin-action">ADD 10 👑</button>
+    <button id="btn-close-admin" class="btn-close" style="color: #000;">CLOSE</button>
+  </div>
+
+  <!-- Password Modal -->
+  <div id="password-modal">
+    <h2>ENTER PASSWORD</h2>
+    <input type="tel" id="admin-password-input" class="numeric-password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="Password" style="font-size: 18px; padding: 10px; width: 80%; margin-bottom: 15px; border-radius: 10px; border: 2px solid #ccc;">
+    <div style="display: flex; gap: 10px; width: 100%; justify-content: center;">
+      <button id="btn-submit-password" class="btn-mini" style="background: #FF69B4; color: white; border: none; padding: 10px 20px; font-size: 16px;">OK</button>
+      <button id="btn-cancel-password" class="btn-mini" style="background: #ccc; color: #555; border: none; padding: 10px 20px; font-size: 16px;">CANCEL</button>
+    </div>
+  </div>
+
+  <!-- Save/Load Modal -->
+  <div id="save-load-modal" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 500; flex-direction: column; justify-content: center; align-items: center;">
+    <div style="background: #FFF; padding: 20px; border-radius: 15px; width: 80%; max-width: 400px; text-align: center; border: 4px solid #FF69B4;">
+      <h2 id="save-load-title" style="color: #FF69B4; margin-top: 0; text-shadow: 1px 1px 0 #FFF;">SAVE / LOAD</h2>
+      <p id="save-load-desc" style="font-size: 14px; color: #555; margin-bottom: 10px;">コードをコピーしてください</p>
+      <textarea id="save-load-input" style="width: 90%; height: 80px; margin: 0 auto 15px auto; padding: 10px; border: 2px solid #DDD; border-radius: 10px; font-family: monospace; font-size: 14px; resize: none; display: block;"></textarea>
+      <div style="display: flex; gap: 10px; justify-content: center;">
+        <button id="btn-save-load-action" class="btn-mini" style="font-size: 16px; padding: 10px 25px; background: #FF69B4; color: #FFF; border: none;">COPY</button>
+        <button id="btn-save-load-close" class="btn-mini" style="background: #CCC; color: #555; border: none; font-size: 16px; padding: 10px 25px;">CLOSE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Wiki Style Character Select Modal -->
+  <div id="wiki-modal">
+    <div class="wiki-header">
+      <div class="wiki-logo">
+        <span>W</span>
+        <div>Character<br>Encyclopedia</div>
+      </div>
+      <div class="wiki-search-bar">Search...</div>
+      <button id="btn-close-wiki" class="btn-wiki-close">✕</button>
+    </div>
+    <div class="wiki-content">
+      <h1 class="wiki-title">Playable Characters</h1>
+      <p class="wiki-subtitle">From Villagepedia, the free encyclopedia</p>
+      <div class="wiki-list" id="wiki-char-list">
+        <!-- Generated by JS -->
+      </div>
+    </div>
+    <div class="wiki-footer">
+      This page was last edited on today, at now. <br>
+      Content is available under CC BY-SA 4.0 unless otherwise noted.
+    </div>
+  </div>
+
+  <!-- Relic Modal -->
+  <div id="relic-modal" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 320px; max-height: 70%; background: #FFF; border: 4px solid #FF69B4; border-radius: 20px; z-index: 160; box-shadow: 0 10px 30px rgba(0,0,0,0.3); overflow: hidden; flex-direction: column;">
+    <div style="background: linear-gradient(135deg, #FF69B4, #FF1493); padding: 15px; text-align: center; color: #FFF; font-weight: bold; font-size: 20px;">
+      🏆 レリクス装備
+    </div>
+    <div style="padding: 10px; font-size: 12px; color: #555; text-align: center; border-bottom: 1px solid #EEE;">
+      装備中 (Max 3): <div id="equipped-relic-list" style="font-weight: bold; color: #FF69B4; min-height: 20px;">なし</div>
+    </div>
+    <div id="relic-list" style="flex: 1; overflow-y: auto; padding: 10px;">
+      <!-- Generated by JS -->
+    </div>
+    <div style="padding: 10px; text-align: center; border-top: 1px solid #EEE;">
+      <button id="btn-close-relic" class="btn-close" style="margin: 0; width: 100%;">閉じる</button>
+    </div>
+  </div>
+
+  <!-- Crate Open Modal -->
+  <div id="crate-modal" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 500; flex-direction: column; justify-content: center; align-items: center;">
+    <div id="crate-animation" style="display: none; flex-direction: column; align-items: center;">
+      <div id="crate-box" style="width: 120px; height: 120px; background: linear-gradient(135deg, #DAA520, #FFD700); border: 6px solid #8B4513; border-radius: 15px; display: flex; justify-content: center; align-items: center; font-size: 60px; animation: shake 0.3s infinite;">📦</div>
+      <div style="color: #FFF; font-size: 24px; margin-top: 20px; font-weight: bold;">開封中...</div>
+    </div>
+    <div id="crate-result" style="display: none; flex-direction: column; align-items: center; text-align: center;">
+      <div id="crate-result-rarity" style="font-size: 20px; color: #FFD700; margin-bottom: 10px;"></div>
+      <div id="crate-result-name" style="font-size: 28px; color: #FFF; font-weight: bold; text-shadow: 2px 2px 0 #000; margin-bottom: 10px;"></div>
+      <div id="crate-result-stats" style="font-size: 16px; color: #90EE90;"></div>
+      <button id="btn-crate-close" class="btn" style="margin-top: 30px; width: 150px; justify-content: center;">OK</button>
+    </div>
+  </div>
+
+  <!-- Diamond Crate Event Banner -->
+  <div id="diamond-crate-banner" style="display: none; position: absolute; top: 150px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #4ECDC4, #20B2AA); padding: 10px 20px; border-radius: 20px; border: 3px solid #FFF; color: #FFF; font-weight: bold; font-size: 16px; text-align: center; z-index: 25; animation: pulse 1s infinite;">
+    💎 ダイヤクレート出現中！ 💎
+  </div>
+
+  <style>
+    .relic-item {
+      background: #FFF;
+      border: 2px solid #DDD;
+      border-radius: 10px;
+      padding: 10px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .relic-item:hover {
+      border-color: #FF69B4;
+      background: #FFF0F5;
+    }
+    .relic-item.equipped {
+      border-color: #FFD700;
+      background: #FFFACD;
+    }
+    .relic-item.locked {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .relic-icon {
+      font-size: 32px;
+    }
+    .relic-info {
+      flex: 1;
+    }
+    .relic-name {
+      font-weight: bold;
+      color: #333;
+    }
+    .relic-stats {
+      font-size: 12px;
+      color: #666;
+    }
+    .relic-rarity {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 10px;
+      color: #FFF;
+    }
+  </style>
+
+  <!-- Game Over Overlay -->
+  <div id="game-over-overlay" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 200; flex-direction: column; justify-content: center; align-items: center; color: #FFF;">
+    <h1 style="font-size: 40px; color: #FF69B4; text-shadow: 2px 2px 0 #FFF; margin-bottom: 20px;">GAME OVER</h1>
+    <button id="btn-retry" class="btn" style="width: 200px; justify-content: center;">
+      🔄 RETRY
+    </button>
+  </div>
+
+  <!-- Import Map -->
+  <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.176.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.176.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+
+    // --- Constants & Settings ---
+    const COLORS = {
+      bg: 0x87CEEB, // Sky Blue
+      player: 0xFF69B4,
+      enemy: 0x9370DB,
+      boss: 0xFF1493,
+      emerald: 0x50C878,
+      diamond: 0x4ECDC4,
+      ground: 0x7CFC00, // LawnGreen
+      shadow: 0x335533,
+      // World 2 Colors (Dark/Gothic)
+      darkBg: 0x191970, // MidnightBlue
+      darkGround: 0x2E0854, // Dark Purple
+      darkFog: 0x4B0082 // Indigo
+    };
+
+    const SETTINGS = {
+      playerSpeed: 0.15,
+      cameraHeight: 10,
+      cameraDistance: 14,
+      bossTimeLimit: 30, // seconds
+      playerMaxHp: 100,
+      diamondPowerBonus: 0.1 // +10% per diamond
+    };
+
+    const CHAR_DATA = [
+      {
+        url: 'https://odqcczjoaznmfpiywmoj-all.supabase.co/storage/v1/object/public/assets/69bfe014-b814-49ca-b26f-ebaf8722828d/files/za0i64sb.png',
+        name: '村人A (Villager A)',
+        desc: 'ごく普通の村人。平均的な能力を持ち、どんな状況にも対応できる万能型。まずはここから始めよう。'
+      },
+      {
+        url: 'https://odqcczjoaznmfpiywmoj-all.supabase.co/storage/v1/object/public/assets/69bfe014-b814-49ca-b26f-ebaf8722828d/files/s0vzpudx.gif',
+        name: 'ダンシング・スライム',
+        desc: '常にリズムを刻んでいる陽気なスライム。その予測不能な動きは敵を惑わせるかもしれない。'
+      },
+      {
+        url: 'https://odqcczjoaznmfpiywmoj-all.supabase.co/storage/v1/object/public/assets/69bfe014-b814-49ca-b26f-ebaf8722828d/files/vf0i006f.png',
+        name: '魔法使い見習い',
+        desc: '魔法学校に通う見習い。まだ大きな魔法は使えないが、潜在能力は計り知れない。'
+      },
+      {
+        url: 'https://odqcczjoaznmfpiywmoj-all.supabase.co/storage/v1/object/public/assets/69bfe014-b814-49ca-b26f-ebaf8722828d/files/7x24heiv.png',
+        name: '森の妖精',
+        desc: '深い森に住む妖精。自然の力を借りて戦う。とても小さくてすばしっこい。'
+      },
+      {
+        url: 'https://odqcczjoaznmfpiywmoj-all.supabase.co/storage/v1/object/public/assets/69bfe014-b814-49ca-b26f-ebaf8722828d/files/7bsysx4x.png',
+        name: '謎の生物',
+        desc: 'どこから来たのか誰も知らない不思議な生き物。見た目は可愛いが、怒らせると怖いらしい。'
+      },
+      {
+        url: 'https://odqcczjoaznmfpiywmoj-all.supabase.co/storage/v1/object/public/assets/a16047c4-e9a9-465c-9f08-4c6e00ea909f/files/m64nsm61.png',
+        name: 'ギャラクシー・ボイジャー',
+        desc: '【限定】イベントパスLv.10達成報酬。宇宙の彼方から来た最強の戦士。',
+        isLocked: true
+      }
+    ];
+
+    // --- Game State ---
+    const state = {
+      isGameRunning: false,
+      cameraMode: 'TPS', // 'TPS' or 'FPS'
+      emeralds: 0,
+      isDiamondEvent: false,
+      forceEvent: false,
+      eventEndTime: 0,
+      maxHp: SETTINGS.playerMaxHp,
+      currentXp: 0,
+      maxXp: 20, // Increased difficulty
+      playerHp: SETTINGS.playerMaxHp,
+      diamonds: 0,
+      paidDiamonds: 0,
+      bossKillCount: 0,
+      enemyKillCount: 0,
+      level: 1,
+      charIndex: 0,
+      isBossActive: false,
+      bossTimer: 0,
+      bossMaxHp: 10,
+      bossCurrentHp: 10,
+      isCoopMode: false,
+      buddy: null,
+      lastTime: 0,
+      enemies: [],
+      particles: [],
+      projectiles: [],
+      items: [],
+      passLevel: 1,
+      passXp: 0,
+      passMaxXp: 20,
+      isPassCharUnlocked: false,
+      relics: {
+        owned: [],
+        equipped: []
+      },
+      crates: 0,
+      currentWorld: 1, // 1 or 2
+      world2Unlocked: false
+    };
+  
+
+  // Relic Definitions
+  const RELIC_DATA = [
+    { id: 'common_sword', name: '古びた剣', icon: '🗡️', rarity: 'common', rarityColor: '#808080', powerBonus: 5, hpBonus: 5, dropRate: 40 },
+    { id: 'uncommon_shield', name: '鉄の盾', icon: '🛡️', rarity: 'uncommon', rarityColor: '#32CD32', powerBonus: 10, hpBonus: 15, dropRate: 30 },
+    { id: 'rare_crown', name: '王者の冠', icon: '👑', rarity: 'rare', rarityColor: '#1E90FF', powerBonus: 20, hpBonus: 25, dropRate: 18 },
+    { id: 'epic_orb', name: '神秘のオーブ', icon: '🔮', rarity: 'epic', rarityColor: '#9932CC', powerBonus: 35, hpBonus: 40, dropRate: 10 },
+    { id: 'legendary_star', name: '伝説の星', icon: '⭐', rarity: 'legendary', rarityColor: '#FFD700', powerBonus: 50, hpBonus: 60, dropRate: 2 }
+  ];
+
+  function getRelicBonuses() {
+    let power = 0;
+    let hp = 0;
+    state.relics.equipped.forEach(id => {
+      const relic = RELIC_DATA.find(r => r.id === id);
+      if (relic) {
+        power += relic.powerBonus;
+        hp += relic.hpBonus;
+      }
+    });
+    return { power, hp };
+  }
+
+    // --- Sound Manager ---
+    class SoundManager {
+      constructor() {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AudioContext();
+        this.masterGain = this.ctx.createGain();
+        this.masterGain.gain.value = 0.3;
+        this.masterGain.connect(this.ctx.destination);
+      }
+
+      resume() {
+        if (this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      play(type) {
+        this.resume();
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+
+        switch (type) {
+          case 'shoot':
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(880, t);
+            osc.frequency.exponentialRampToValueAtTime(110, t + 0.1);
+            gain.gain.setValueAtTime(0.2, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+            osc.start(t);
+            osc.stop(t + 0.1);
+            break;
+          case 'hit':
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(150, t);
+            osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.1);
+            gain.gain.setValueAtTime(0.2, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+            osc.start(t);
+            osc.stop(t + 0.1);
+            break;
+          case 'explosion':
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(100, t);
+            osc.frequency.exponentialRampToValueAtTime(10, t + 0.3);
+            gain.gain.setValueAtTime(0.4, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+            osc.start(t);
+            osc.stop(t + 0.3);
+            break;
+          case 'coin':
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(1200, t);
+            osc.frequency.setValueAtTime(1800, t + 0.1);
+            gain.gain.setValueAtTime(0.2, t);
+            gain.gain.linearRampToValueAtTime(0, t + 0.2);
+            osc.start(t);
+            osc.stop(t + 0.2);
+            break;
+          case 'powerup':
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(440, t);
+            osc.frequency.linearRampToValueAtTime(880, t + 0.5);
+            gain.gain.setValueAtTime(0.3, t);
+            gain.gain.linearRampToValueAtTime(0, t + 0.5);
+            osc.start(t);
+            osc.stop(t + 0.5);
+            break;
+          case 'damage':
+             osc.type = 'sawtooth';
+             osc.frequency.setValueAtTime(200, t);
+             osc.frequency.linearRampToValueAtTime(100, t + 0.2);
+             gain.gain.setValueAtTime(0.4, t);
+             gain.gain.linearRampToValueAtTime(0, t + 0.2);
+             osc.start(t);
+             osc.stop(t + 0.2);
+             break;
+          case 'swing':
+             osc.type = 'triangle';
+             osc.frequency.setValueAtTime(300, t);
+             osc.frequency.linearRampToValueAtTime(100, t + 0.1);
+             gain.gain.setValueAtTime(0.3, t);
+             gain.gain.linearRampToValueAtTime(0, t + 0.1);
+             osc.start(t);
+             osc.stop(t + 0.1);
+             break;
+          case 'crate':
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(200, t);
+            osc.frequency.exponentialRampToValueAtTime(800, t + 0.5);
+            gain.gain.setValueAtTime(0.3, t);
+            gain.gain.linearRampToValueAtTime(0, t + 0.5);
+            osc.start(t);
+            osc.stop(t + 0.5);
+            break;
+          case 'warp':
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(200, t);
+            osc.frequency.linearRampToValueAtTime(600, t + 1.0);
+            gain.gain.setValueAtTime(0.3, t);
+            gain.gain.linearRampToValueAtTime(0, t + 1.0);
+            osc.start(t);
+            osc.stop(t + 1.0);
+            break;
+        }
+      }
+    }
+
+    let soundManager;
+
+    // --- Three.js Setup ---
+    const container = document.getElementById('game-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(COLORS.bg);
+    scene.fog = new THREE.Fog(COLORS.bg, 30, 90);
+
+    // Camera
+    const aspect = window.innerWidth / window.innerHeight;
+    const camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 1000);
+    camera.position.set(0, SETTINGS.cameraHeight, SETTINGS.cameraDistance);
+    camera.lookAt(0, 0, 0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    dirLight.position.set(10, 20, 10);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 1024;
+    dirLight.shadow.mapSize.height = 1024;
+    scene.add(dirLight);
+
+    // Environment Group
+    let environmentGroup = new THREE.Group();
+    scene.add(environmentGroup);
+
+    function createWorldEnvironment(worldId) {
+      // Clear existing
+      while(environmentGroup.children.length > 0){ 
+        environmentGroup.remove(environmentGroup.children[0]); 
+      }
+
+      const isWorld2 = worldId === 2;
+      
+      // Colors
+      const bgColor = isWorld2 ? COLORS.darkBg : COLORS.bg;
+      const groundColor = isWorld2 ? COLORS.darkGround : COLORS.ground;
+      const fogColor = isWorld2 ? COLORS.darkFog : COLORS.bg;
+
+      scene.background = new THREE.Color(bgColor);
+      scene.fog = new THREE.Fog(fogColor, 30, 90);
+
+      // Ground
+      const groundGeo = new THREE.CircleGeometry(150, 64);
+      const groundMat = new THREE.MeshToonMaterial({ color: groundColor });
+      const ground = new THREE.Mesh(groundGeo, groundMat);
+      ground.rotation.x = -Math.PI / 2;
+      ground.receiveShadow = true;
+      environmentGroup.add(ground);
+
+      // Objects
+      if (isWorld2) {
+        // World 2: Dark/Gothic - Enhanced Objects
+        const treeGeo = new THREE.ConeGeometry(2, 12, 6); // Spiky dead trees
+        const treeMat = new THREE.MeshToonMaterial({ color: 0x4B0082 }); // Indigo
+        
+        // Graves
+        const graveGeo = new THREE.BoxGeometry(1.5, 2.5, 0.5);
+        const graveMat = new THREE.MeshToonMaterial({ color: 0x696969 });
+
+        // Ruins (Broken Pillars)
+        const pillarGeo = new THREE.CylinderGeometry(1, 1, 4, 8);
+        const pillarMat = new THREE.MeshToonMaterial({ color: 0x808080 });
+
+        // Spikes
+        const spikeGeo = new THREE.ConeGeometry(0.5, 2, 4);
+        const spikeMat = new THREE.MeshToonMaterial({ color: 0x8B0000 });
+
+        // Trees
+        for(let i=0; i<60; i++) {
+          const mesh = new THREE.Mesh(treeGeo, treeMat);
+          const angle = Math.random() * Math.PI * 2;
+          const dist = 40 + Math.random() * 80;
+          mesh.position.set(Math.sin(angle)*dist, 6, Math.cos(angle)*dist);
+          mesh.rotation.x = (Math.random() - 0.5) * 0.5;
+          environmentGroup.add(mesh);
+        }
+
+        // Graves
+        for(let i=0; i<30; i++) {
+          const mesh = new THREE.Mesh(graveGeo, graveMat);
+          const angle = Math.random() * Math.PI * 2;
+          const dist = 20 + Math.random() * 60;
+          mesh.position.set(Math.sin(angle)*dist, 1.25, Math.cos(angle)*dist);
+          mesh.rotation.y = Math.random() * 0.5;
+          mesh.rotation.z = (Math.random() - 0.5) * 0.2;
+          environmentGroup.add(mesh);
+        }
+
+        // Ruins
+        for(let i=0; i<20; i++) {
+          const mesh = new THREE.Mesh(pillarGeo, pillarMat);
+          const angle = Math.random() * Math.PI * 2;
+          const dist = 30 + Math.random() * 70;
+          mesh.position.set(Math.sin(angle)*dist, 2, Math.cos(angle)*dist);
+          mesh.rotation.x = (Math.random() - 0.5) * 0.5;
+          mesh.rotation.z = (Math.random() - 0.5) * 0.5;
+          environmentGroup.add(mesh);
+        }
+
+        // Spikes
+        for(let i=0; i<40; i++) {
+          const mesh = new THREE.Mesh(spikeGeo, spikeMat);
+          const angle = Math.random() * Math.PI * 2;
+          const dist = 15 + Math.random() * 80;
+          mesh.position.set(Math.sin(angle)*dist, 1, Math.cos(angle)*dist);
+          environmentGroup.add(mesh);
+        }
+        
+        // Floating Crystals
+        const crystalGeo = new THREE.OctahedronGeometry(1);
+        const crystalMat = new THREE.MeshToonMaterial({ color: 0x9932CC, emissive: 0x4B0082 });
+        for(let i=0; i<30; i++) {
+          const mesh = new THREE.Mesh(crystalGeo, crystalMat);
+          const angle = Math.random() * Math.PI * 2;
+          const dist = 30 + Math.random() * 60;
+          mesh.position.set(Math.sin(angle)*dist, 3 + Math.random()*5, Math.cos(angle)*dist);
+          environmentGroup.add(mesh);
+        }
+
+      } else {
+        // World 1: Happy/Cute
+        const treeGeo = new THREE.ConeGeometry(4, 10, 8);
+        const treeMat = new THREE.MeshToonMaterial({ color: 0x228B22 });
+        const trunkGeo = new THREE.CylinderGeometry(1, 1, 3);
+        const trunkMat = new THREE.MeshToonMaterial({ color: 0x8B4513 });
+
+        for(let i=0; i<60; i++) {
+          const group = new THREE.Group();
+          const tree = new THREE.Mesh(treeGeo, treeMat);
+          tree.position.y = 5;
+          const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+          trunk.position.y = 1.5;
+          group.add(trunk);
+          group.add(tree);
+          
+          const angle = Math.random() * Math.PI * 2;
+          const dist = 40 + Math.random() * 80;
+          group.position.set(Math.sin(angle)*dist, 0, Math.cos(angle)*dist);
+          group.scale.setScalar(1 + Math.random() * 1.0);
+          environmentGroup.add(group);
+        }
+
+        const rockGeo = new THREE.DodecahedronGeometry(2);
+        const rockMat = new THREE.MeshToonMaterial({ color: 0x808080 });
+        for(let i=0; i<20; i++) {
+          const rock = new THREE.Mesh(rockGeo, rockMat);
+          const angle = Math.random() * Math.PI * 2;
+          const dist = 30 + Math.random() * 60;
+          rock.position.set(Math.sin(angle)*dist, 1, Math.cos(angle)*dist);
+          rock.scale.setScalar(1 + Math.random());
+          environmentGroup.add(rock);
+        }
+      }
+    }
+
+    // --- Classes ---
+
+    class Gate {
+      constructor(targetWorldId, pos) {
+        this.targetWorld = targetWorldId;
+        this.mesh = new THREE.Group();
+        this.mesh.position.copy(pos);
+
+        // Portal Visual
+        const color = targetWorldId === 2 ? 0x800080 : 0x87CEEB; // Purple for W2, Blue for W1
+        const geo = new THREE.TorusGeometry(3, 0.5, 16, 32);
+        const mat = new THREE.MeshToonMaterial({ color: color, emissive: color, emissiveIntensity: 0.5 });
+        this.ring = new THREE.Mesh(geo, mat);
+        this.ring.position.y = 3;
+        this.mesh.add(this.ring);
+
+        // Swirl
+        const swirlGeo = new THREE.CircleGeometry(2.5, 32);
+        const swirlMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide, transparent: true, opacity: 0.7 });
+        this.swirl = new THREE.Mesh(swirlGeo, swirlMat);
+        this.swirl.position.y = 3;
+        this.mesh.add(this.swirl);
+
+        scene.add(this.mesh);
+      }
+
+      update(playerPos) {
+        this.ring.rotation.y += 0.02;
+        this.swirl.rotation.z -= 0.05;
+
+        const dist = this.mesh.position.distanceTo(playerPos);
+        if (dist < 3.0) {
+          if (this.targetWorld === 2) {
+            if (state.level >= 100) {
+              loadWorld(2);
+            } else {
+              showFloatingText("Lv.100 REQUIRED!", this.mesh.position, "#FF0000");
+            }
+          } else {
+            loadWorld(1);
+          }
+        }
+      }
+    }
+
+    class Player {
+      constructor() {
+        this.mesh = new THREE.Group();
+        
+        // 3D Body
+        const geometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+        this.material = new THREE.MeshToonMaterial({ color: 0xFFFFFF });
+        this.body = new THREE.Mesh(geometry, this.material);
+        this.body.castShadow = true;
+        this.body.position.y = 0.75;
+        this.mesh.add(this.body);
+
+        // Shadow
+        const shadowGeo = new THREE.CircleGeometry(1.0, 32);
+        const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.2 });
+        const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+        shadow.rotation.x = -Math.PI / 2;
+        shadow.position.y = 0.05;
+        this.mesh.add(shadow);
+
+        // Sword
+        this.swordContainer = new THREE.Group();
+        this.swordContainer.position.set(0.8, 0.8, 0.3); 
+        this.mesh.add(this.swordContainer);
+
+        const bladeGeo = new THREE.BoxGeometry(0.2, 1.8, 0.2);
+        bladeGeo.translate(0, 0.9, 0);
+        const bladeMat = new THREE.MeshToonMaterial({ color: 0x4ECDC4 });
+        this.sword = new THREE.Mesh(bladeGeo, bladeMat);
+        
+        const handleGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.6);
+        handleGeo.translate(0, -0.3, 0);
+        const handleMat = new THREE.MeshToonMaterial({ color: 0xFFD700 });
+        const handle = new THREE.Mesh(handleGeo, handleMat);
+        this.sword.add(handle);
+
+        const guardGeo = new THREE.BoxGeometry(0.8, 0.15, 0.4);
+        const guardMat = new THREE.MeshToonMaterial({ color: 0xFF69B4 });
+        const guard = new THREE.Mesh(guardGeo, guardMat);
+        this.sword.add(guard);
+
+        this.swordContainer.add(this.sword);
+        
+        this.sword.rotation.x = Math.PI / 3;
+        this.sword.rotation.z = -Math.PI / 8;
+
+        scene.add(this.mesh);
+        this.pos = new THREE.Vector3(0, 0, 0);
+        this.velocity = new THREE.Vector3(0, 0, 0);
+        this.facingDir = new THREE.Vector3(0, 0, 1);
+        this.invulnerable = 0;
+        this.vy = 0;
+        this.isGrounded = true;
+        
+        this.isAttacking = false;
+        this.attackTimer = 0;
+        this.attackDuration = 0.25;
+      }
+
+      update(dt) {
+        this.vy -= 0.02;
+        this.pos.y += this.vy;
+        
+        if (this.pos.y <= 0) {
+          this.pos.y = 0;
+          this.vy = 0;
+          this.isGrounded = true;
+        } else {
+          this.isGrounded = false;
+        }
+
+        this.pos.add(this.velocity);
+        
+        const limit = 18;
+        if (this.pos.x > limit) this.pos.x = limit;
+        if (this.pos.x < -limit) this.pos.x = -limit;
+        if (this.pos.z > limit) this.pos.z = limit;
+        if (this.pos.z < -limit) this.pos.z = -limit;
+
+        this.mesh.position.copy(this.pos);
+
+        if (this.invulnerable > 0) {
+          this.invulnerable -= dt;
+          this.body.material.opacity = Math.sin(Date.now() * 0.02) * 0.5 + 0.5;
+          this.body.material.transparent = true;
+        } else {
+          this.body.material.opacity = 1.0;
+          this.body.material.transparent = false;
+        }
+
+        if (this.velocity.lengthSq() > 0.001) {
+            const lookTarget = this.pos.clone().add(this.velocity);
+            lookTarget.y = this.pos.y;
+            this.mesh.lookAt(lookTarget);
+            this.facingDir.copy(this.velocity).normalize();
+            
+            if (this.isGrounded) {
+                this.body.position.y = 0.75 + Math.sin(Date.now() * 0.015) * 0.2;
+            }
+        } else {
+            if (this.isGrounded) {
+                this.body.position.y = 0.75 + Math.sin(Date.now() * 0.005) * 0.05;
+            }
+        }
+
+        if (this.isAttacking) {
+            this.attackTimer += dt;
+            const progress = this.attackTimer / this.attackDuration;
+            
+            if (progress < 1.0) {
+                const swingAngle = -Math.PI/2 + (Math.PI * progress * 1.5);
+                this.swordContainer.rotation.y = swingAngle;
+                this.sword.rotation.x = Math.PI / 2;
+                this.sword.rotation.z = 0;
+            } else {
+                this.isAttacking = false;
+                this.swordContainer.rotation.set(0, 0, 0);
+                this.sword.rotation.set(Math.PI / 3, 0, -Math.PI / 8);
+            }
+        } else {
+            this.sword.rotation.x = Math.PI / 3 + Math.sin(Date.now() * 0.003) * 0.05;
+        }
+      }
+
+      updateTexture() {
+        const charData = CHAR_DATA[state.charIndex];
+        const loader = new THREE.TextureLoader();
+        loader.crossOrigin = 'anonymous';
+        
+        loader.load(charData.url, (texture) => {
+          texture.colorSpace = THREE.SRGBColorSpace;
+          this.body.material.map = texture;
+          this.body.material.needsUpdate = true;
+        }, undefined, (err) => {
+          this.body.material.color.setHex(COLORS.player);
+        });
+      }
+
+      jump() {
+        if (this.isGrounded) {
+          this.vy = 0.5;
+          this.isGrounded = false;
+        }
+      }
+
+      takeDamage(amount) {
+        if (this.invulnerable > 0) return;
+        
+        state.playerHp = Math.max(0, state.playerHp - amount);
+        if (soundManager) soundManager.play('damage');
+        this.invulnerable = 1.0;
+        showFloatingText(`-${amount}`, this.pos, '#FF0000');
+        updateUI();
+
+        if (state.playerHp <= 0) {
+          triggerGameOver();
+        }
+      }
+
+      shoot() {
+        const proj = new Projectile(this.pos.clone().add(new THREE.Vector3(0, 0.5, 0)), null);
+        proj.isFreeFlight = true;
+        proj.direction = this.facingDir.clone();
+        if (soundManager) soundManager.play('shoot');
+        state.projectiles.push(proj);
+      }
+
+      melee() {
+        if (this.isAttacking) return;
+        
+        this.isAttacking = true;
+        this.attackTimer = 0;
+        this.swordContainer.rotation.y = -Math.PI / 2;
+
+        if (soundManager) soundManager.play('swing');
+        
+        const slashPos = this.pos.clone().add(this.facingDir.clone().multiplyScalar(1.5));
+        slashPos.y += 1.0;
+        spawnParticles(slashPos, 8, 0xFFFFFF);
+        
+        state.enemies.forEach(enemy => {
+          const dist = this.pos.distanceTo(enemy.mesh.position);
+          if (dist < 4.0) {
+             const toEnemy = new THREE.Vector3().subVectors(enemy.mesh.position, this.pos).normalize();
+             const dot = this.facingDir.dot(toEnemy);
+             if (dot > 0.3) {
+               const relicBonus = getRelicBonuses();
+               const damage = 5 + (state.level * 2);
+               const finalDamage = damage * (1 + state.diamonds * SETTINGS.diamondPowerBonus) * (1 + relicBonus.power / 100);
+               enemy.takeDamage(finalDamage);
+             }
+          }
+        });
+      }
+
+      setVisible(visible) {
+        this.body.visible = visible;
+        this.swordContainer.visible = visible;
+      }
+    }
+
+    class Enemy {
+      constructor(isBoss = false) {
+        this.isBoss = isBoss;
+        this.mesh = new THREE.Group();
+        this.worldMultiplier = state.currentWorld === 2 ? 10 : 1; // World 2 is 10x stronger base
+
+        let color = COLORS.enemy;
+        let scale = isBoss ? 2.5 : 1.0;
+        let geo;
+
+        if (isBoss) {
+          const bossType = (state.level - 1) % 5;
+          
+          if (state.currentWorld === 2) {
+             // World 2 Bosses (Darker)
+             geo = new THREE.TorusKnotGeometry(1, 0.3, 100, 16);
+             color = 0x8B0000; // DarkRed
+          } else {
+            switch(bossType) {
+              case 0: geo = new THREE.SphereGeometry(1, 32, 32); color = 0xFF1493; break;
+              case 1: geo = new THREE.BoxGeometry(1.5, 1.5, 1.5); color = 0x00BFFF; break;
+              case 2: geo = new THREE.TorusGeometry(0.8, 0.3, 16, 100); color = 0xFFD700; break;
+              case 3: geo = new THREE.IcosahedronGeometry(1, 0); color = 0xDC143C; break;
+              case 4: geo = new THREE.TorusKnotGeometry(0.6, 0.2, 64, 16); color = 0x9400D3; break;
+            }
+          }
+        } else {
+          // World 2 Enemies
+          if (state.currentWorld === 2) {
+             const r = Math.random();
+             if (r < 0.5) geo = new THREE.ConeGeometry(0.6, 1.5, 4); // Spikes
+             else geo = new THREE.OctahedronGeometry(0.7);
+             color = 0x483D8B; // DarkSlateBlue
+          } else {
+             const r = Math.random();
+             if (r < 0.33) geo = new THREE.BoxGeometry(1, 1, 1);
+             else if (r < 0.66) geo = new THREE.SphereGeometry(0.6, 16, 16);
+             else geo = new THREE.ConeGeometry(0.6, 1.2, 16);
+             color = COLORS.enemy;
+          }
+        }
+        
+        const mat = new THREE.MeshToonMaterial({ color: color });
+        this.body = new THREE.Mesh(geo, mat);
+        this.body.castShadow = true;
+        this.body.position.y = 0.5 * scale;
+        this.body.scale.set(scale, scale, scale);
+        this.mesh.add(this.body);
+
+        // HP Bar
+        const barWidth = 1.5;
+        const barHeight = 0.2;
+        const bgGeo = new THREE.PlaneGeometry(barWidth, barHeight);
+        const bgMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        this.hpBarBg = new THREE.Mesh(bgGeo, bgMat);
+        this.hpBarBg.position.y = scale + 0.8;
+        this.mesh.add(this.hpBarBg);
+
+        const fgGeo = new THREE.PlaneGeometry(barWidth - 0.1, barHeight - 0.06);
+        fgGeo.translate((barWidth - 0.1) / 2, 0, 0);
+        const fgMat = new THREE.MeshBasicMaterial({ color: 0xFF0000 });
+        this.hpBarFg = new THREE.Mesh(fgGeo, fgMat);
+        this.hpBarFg.position.y = scale + 0.8;
+        this.hpBarFg.position.x = - (barWidth - 0.1) / 2;
+        this.hpBarFg.position.z = 0.02;
+        this.mesh.add(this.hpBarFg);
+
+        const angle = Math.random() * Math.PI * 2;
+        const radius = isBoss ? 0 : 15 + Math.random() * 5;
+        this.mesh.position.set(Math.sin(angle) * radius, 0, Math.cos(angle) * radius);
+        
+        scene.add(this.mesh);
+
+        // HP Calculation
+        let baseHp = 10 + (state.level * 5);
+        if (state.currentWorld === 2) {
+          baseHp = (baseHp * 10) + 1000; // Massive boost for World 2
+        }
+        
+        this.hp = isBoss ? state.bossMaxHp : baseHp;
+        this.maxHp = this.hp;
+        this.speed = isBoss ? 0.03 : 0.04;
+        if (state.currentWorld === 2) this.speed *= 1.5; // Faster in World 2
+
+        this.active = true;
+      }
+
+      update(playerPos) {
+        if (!this.active) return;
+
+        const dir = new THREE.Vector3().subVectors(playerPos, this.mesh.position).normalize();
+        if (this.isBoss && this.mesh.position.distanceTo(playerPos) < 4) {
+          // Stay
+        } else {
+          this.mesh.position.add(dir.multiplyScalar(this.speed));
+        }
+
+        this.body.rotation.x += 0.02;
+        this.body.rotation.y += 0.02;
+        
+        if (!this.isBoss) {
+           this.body.position.y = 0.5 + Math.abs(Math.sin(Date.now() * 0.005)) * 0.5;
+        }
+
+        this.hpBarBg.lookAt(camera.position);
+        this.hpBarFg.lookAt(camera.position);
+        this.hpBarFg.scale.x = Math.max(0, this.hp / this.maxHp);
+      }
+
+      takeDamage(amount) {
+        this.hp -= amount;
+        if (soundManager) soundManager.play('hit');
+        spawnParticles(this.mesh.position, 5, COLORS.player);
+
+        if (this.hp <= 0) {
+          this.die();
+        }
+      }
+
+      die() {
+        this.active = false;
+        if (soundManager) soundManager.play('explosion');
+        scene.remove(this.mesh);
+        spawnParticles(this.mesh.position, 15, this.isBoss ? COLORS.boss : COLORS.enemy);
+        
+        addPassXp(this.isBoss ? 10 : 1);
+
+        if (this.isBoss) {
+          for(let i=0; i<10; i++) spawnItem(this.mesh.position, 'emerald');
+          completeBossFight(true);
+        } else {
+          if (state.isDiamondEvent) {
+            spawnItem(this.mesh.position, 'diamond');
+            if (Math.random() < 0.1) {
+              spawnDiamondCrate();
+            }
+          } else {
+            spawnItem(this.mesh.position, 'emerald');
+          }
+          
+          state.enemyKillCount++;
+          if (state.enemyKillCount >= 50) {
+            state.enemyKillCount = 0;
+            state.paidDiamonds++;
+            showFloatingText("👑 GET!", this.mesh.position, "#FFD700");
+            updateUI();
+          }
+        }
+      }
+    }
+
+    class Projectile {
+      constructor(pos, target) {
+        this.mesh = new THREE.Mesh(
+          new THREE.SphereGeometry(0.3),
+          new THREE.MeshToonMaterial({ color: 0xFFFF00, emissive: 0x555500 })
+        );
+        this.mesh.position.copy(pos);
+        scene.add(this.mesh);
+        
+        this.target = target;
+        this.speed = 0.4;
+        this.active = true;
+        this.isFreeFlight = false;
+        this.direction = new THREE.Vector3();
+      }
+
+      update() {
+        if (!this.active) return;
+        
+        if (this.isFreeFlight) {
+          this.mesh.position.add(this.direction.clone().multiplyScalar(this.speed));
+          if (this.mesh.position.distanceTo(player.pos) > 20) { this.active = false; scene.remove(this.mesh); }
+          
+          state.enemies.forEach(enemy => {
+            if (!enemy.active) return;
+            if (this.mesh.position.distanceTo(enemy.mesh.position) < 1.5) {
+              const baseDamage = 0.5 + (state.level * 0.1);
+              const damage = baseDamage * (1 + state.diamonds * SETTINGS.diamondPowerBonus);
+              enemy.takeDamage(damage);
+              this.active = false;
+              scene.remove(this.mesh);
+            }
+          });
+          return;
+        }
+      }
+    }
+
+    class Buddy {
+      constructor() {
+        this.mesh = new THREE.Group();
+        const geometry = new THREE.BoxGeometry(1.2, 1.2, 1.2);
+        const material = new THREE.MeshToonMaterial({ color: 0x87CEEB });
+        this.body = new THREE.Mesh(geometry, material);
+        this.body.castShadow = true;
+        this.body.position.y = 0.6;
+        this.mesh.add(this.body);
+
+        scene.add(this.mesh);
+        this.pos = new THREE.Vector3(2, 0, 2);
+        this.mesh.position.copy(this.pos);
+        this.attackCooldown = 0;
+      }
+
+      update(dt, playerPos) {
+        const dist = this.pos.distanceTo(playerPos);
+        if (dist > 3.0) {
+          const dir = new THREE.Vector3().subVectors(playerPos, this.pos).normalize();
+          this.pos.add(dir.multiplyScalar(SETTINGS.playerSpeed * 0.95));
+        }
+
+        this.body.position.y = 0.6 + Math.sin(Date.now() * 0.01 + 2) * 0.1;
+        this.body.rotation.y -= 0.02;
+        this.mesh.position.copy(this.pos);
+
+        this.attackCooldown -= dt;
+        if (this.attackCooldown <= 0) {
+          this.attack();
+          this.attackCooldown = 0.6;
+        }
+      }
+
+      attack() {
+        let nearest = null;
+        let minDist = 10;
+        state.enemies.forEach(enemy => {
+          const dist = this.pos.distanceTo(enemy.mesh.position);
+          if (dist < minDist) {
+            minDist = dist;
+            nearest = enemy;
+          }
+        });
+
+        if (nearest) {
+          const proj = new Projectile(this.pos.clone().add(new THREE.Vector3(0, 0.5, 0)), null);
+          proj.isFreeFlight = true;
+          proj.direction = new THREE.Vector3().subVectors(nearest.mesh.position, this.pos).normalize();
+          proj.mesh.material.color.setHex(0x00BFFF);
+          state.projectiles.push(proj);
+        }
+      }
+    }
+
+    class Item {
+      constructor(pos, type) {
+        this.type = type;
+        const color = type === 'emerald' ? COLORS.emerald : COLORS.diamond;
+        const geo = type === 'emerald' ? new THREE.OctahedronGeometry(0.4) : new THREE.OctahedronGeometry(0.4, 1);
+        
+        this.mesh = new THREE.Mesh(
+          geo,
+          new THREE.MeshToonMaterial({ color: color, emissive: 0x222222 })
+        );
+        
+        this.mesh.position.copy(pos);
+        this.mesh.position.x += (Math.random() - 0.5) * 2;
+        this.mesh.position.z += (Math.random() - 0.5) * 2;
+        this.mesh.position.y = 0.5;
+        
+        scene.add(this.mesh);
+        this.active = true;
+        this.bobOffset = Math.random() * Math.PI;
+      }
+
+      update(playerPos) {
+        if (!this.active) return;
+
+        this.mesh.position.y = 0.5 + Math.sin(Date.now() * 0.005 + this.bobOffset) * 0.2;
+        this.mesh.rotation.y += 0.05;
+
+        const dist = this.mesh.position.distanceTo(playerPos);
+        if (dist < 3) {
+          const dir = new THREE.Vector3().subVectors(playerPos, this.mesh.position).normalize();
+          this.mesh.position.add(dir.multiplyScalar(0.2));
+        }
+
+        if (dist < 1) {
+          this.collect();
+        }
+      }
+
+      collect() {
+        this.active = false;
+        scene.remove(this.mesh);
+        
+        if (this.type === 'emerald') {
+          state.emeralds++;
+          if (soundManager) soundManager.play('coin');
+          if (!state.isBossActive && state.currentXp < state.maxXp) {
+            state.currentXp++;
+          }
+          showFloatingText(`+1`, this.mesh.position, '#50C878');
+        } else {
+          state.diamonds++;
+          if (soundManager) soundManager.play('coin');
+          showFloatingText(`+1`, this.mesh.position, '#4ECDC4');
+        }
+        updateUI();
+      }
+    }
+
+    // --- Particle System ---
+    function spawnParticles(pos, count, color) {
+      for (let i = 0; i < count; i++) {
+        const mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(0.2, 0.2, 0.2),
+          new THREE.MeshBasicMaterial({ color: color })
+        );
+        mesh.position.copy(pos);
+        
+        const vel = new THREE.Vector3(
+          (Math.random() - 0.5) * 0.5,
+          Math.random() * 0.5,
+          (Math.random() - 0.5) * 0.5
+        );
+
+        scene.add(mesh);
+        state.particles.push({ mesh, vel, life: 1.0 });
+      }
+    }
+
+    function spawnItem(pos, type) {
+      state.items.push(new Item(pos, type));
+    }
+
+    function spawnDiamondCrate() {
+      state.crates++;
+      showFloatingText("💎 DIAMOND CRATE GET!", player.pos, "#4ECDC4");
+      if (soundManager) soundManager.play('powerup');
+      updateUI();
+    }
+
+    function spawnBuddy() {
+      if (state.buddy) {
+        scene.remove(state.buddy.mesh);
+      }
+      state.buddy = new Buddy();
+    }
+
+    function checkDiamondEvent() {
+      const now = Date.now();
+      const date = new Date(now);
+      const minutes = date.getMinutes();
+      const seconds = date.getSeconds();
+      
+      const isRegularTime = minutes < 5;
+      const isExtendedTime = now < state.eventEndTime;
+      const isEvent = isRegularTime || isExtendedTime || state.forceEvent;
+
+      const banner = document.getElementById('event-banner');
+      const countdown = document.getElementById('event-countdown');
+      const timer = document.getElementById('event-timer');
+
+      countdown.style.display = 'block';
+
+      if (isEvent && !state.isDiamondEvent) {
+        state.isDiamondEvent = true;
+        banner.style.display = 'block';
+        showFloatingText("DIAMOND EVENT START!", player.pos, "#4ECDC4");
+      } else if (!isEvent && state.isDiamondEvent) {
+        state.isDiamondEvent = false;
+        banner.style.display = 'none';
+        showFloatingText("EVENT ENDED...", player.pos, "#555");
+      }
+
+      if (state.isDiamondEvent) {
+        if (isExtendedTime) {
+          const remaining = Math.ceil((state.eventEndTime - now) / 1000);
+          const m = Math.floor(remaining / 60);
+          const s = remaining % 60;
+          timer.innerText = `EXTENDED ${m}:${s.toString().padStart(2, '0')}`;
+        } else if (state.forceEvent) {
+          timer.innerText = "FORCED";
+        } else {
+          timer.innerText = `${4 - minutes}:${(59 - seconds).toString().padStart(2, '0')}`;
+        }
+      } else {
+        timer.innerText = `NEXT ${59 - minutes}:${(59 - seconds).toString().padStart(2, '0')}`;
+      }
+    }
+
+    // --- Pass System Logic ---
+    function addPassXp(amount) {
+      if (state.passLevel >= 10) return;
+
+      state.passXp += amount;
+      if (state.passXp >= state.passMaxXp) {
+        state.passLevel++;
+        state.passXp = 0;
+        state.passMaxXp += 10;
+        
+        if (state.passLevel <= 9) {
+          state.paidDiamonds++;
+          showFloatingText("PASS LV UP! 👑+1", player.pos, "#FFD700");
+        } else if (state.passLevel >= 10) {
+          state.isPassCharUnlocked = true;
+          showFloatingText("PASS MAX! CHAR GET!", player.pos, "#00FFFF");
+          showNotification("イベントパスLv.10達成！限定キャラクターを獲得しました！");
+        }
+      }
+      updatePassUI();
+    }
+
+    function updatePassUI() {
+      document.getElementById('pass-level-display').innerText = state.passLevel;
+      document.getElementById('pass-xp-display').innerText = state.passXp;
+      document.getElementById('pass-max-xp-display').innerText = state.passMaxXp;
+      
+      const pct = Math.min(100, (state.passXp / state.passMaxXp) * 100);
+      document.getElementById('pass-xp-bar').style.width = `${pct}%`;
+
+      const list = document.getElementById('pass-list');
+      list.innerHTML = '';
+
+      for (let i = 1; i <= 10; i++) {
+        const row = document.createElement('div');
+        row.className = 'pass-level-row';
+        if (state.passLevel > i || (state.passLevel === 10 && i === 10)) {
+          row.classList.add('completed');
+        }
+
+        let rewardText = "👑 Premium Diamond x1";
+        if (i === 10) rewardText = `🎁 限定キャラ: ギャラクシー・ボイジャー <img src="${CHAR_DATA[5].url}" style="width:24px;height:24px;vertical-align:middle;border:1px solid #ccc;border-radius:4px;background:#fff;margin-left:5px;">`;
+
+        const check = (state.passLevel > i || (state.passLevel === 10 && i === 10)) ? "✅" : "⬜";
+
+        row.innerHTML = `
+          <div class="pass-level-num">Lv.${i}</div>
+          <div class="pass-reward">${rewardText}</div>
+          <div class="pass-check">${check}</div>
+        `;
+        list.appendChild(row);
+      }
+    }
+
+    // --- World Management ---
+    let gates = [];
+
+    function loadWorld(worldId) {
+      if (soundManager) soundManager.play('warp');
+      
+      // Clear entities
+      state.enemies.forEach(e => scene.remove(e.mesh));
+      state.enemies = [];
+      state.items.forEach(i => scene.remove(i.mesh));
+      state.items = [];
+      state.projectiles.forEach(p => scene.remove(p.mesh));
+      state.projectiles = [];
+      gates.forEach(g => scene.remove(g.mesh));
+      gates = [];
+
+      state.currentWorld = worldId;
+      createWorldEnvironment(worldId);
+
+      // Spawn Gates
+      if (worldId === 1) {
+        // Gate to World 2
+        gates.push(new Gate(2, new THREE.Vector3(0, 0, -15)));
+      } else if (worldId === 2) {
+        // Gate back to World 1
+        gates.push(new Gate(1, new THREE.Vector3(0, 0, 15)));
+      }
+
+      // Reset Player Pos
+      player.pos.set(0, 0, 0);
+      player.velocity.set(0, 0, 0);
+
+      showNotification(`WORLD ${worldId} LOADED`);
+      showFloatingText(`WELCOME TO WORLD ${worldId}`, player.pos, worldId === 2 ? "#800080" : "#87CEEB");
+    }
+
+    // --- Game Logic ---
+
+    const player = new Player();
+
+    function startBossFight() {
+      if (state.isBossActive) return;
+      
+      state.enemies.forEach(e => {
+        scene.remove(e.mesh);
+        e.active = false;
+      });
+      state.enemies = [];
+
+      state.isBossActive = true;
+      
+      // Boss HP Scaling
+      let bossHp = 100 * state.level;
+      if (state.currentWorld === 2) bossHp *= 10; // World 2 Boss is 10x stronger
+
+      state.bossMaxHp = bossHp;
+      state.bossCurrentHp = state.bossMaxHp;
+      state.currentXp = 0;
+      state.bossTimer = SETTINGS.bossTimeLimit;
+
+      const boss = new Enemy(true);
+      state.enemies.push(boss);
+
+      document.getElementById('boss-timer-container').style.display = 'flex';
+      document.getElementById('btn-boss').style.display = 'none';
+    }
+
+    function completeBossFight(win) {
+      state.isBossActive = false;
+      state.isCoopMode = false;
+      if (state.buddy) {
+        scene.remove(state.buddy.mesh);
+        state.buddy = null;
+      }
+      document.getElementById('boss-timer-container').style.display = 'none';
+
+      if (win) {
+        state.bossKillCount++;
+        if (state.bossKillCount >= 2) {
+          state.bossKillCount = 0;
+          state.paidDiamonds++;
+          showFloatingText("👑 GET!", player.pos, "#FFD700");
+        }
+
+        performLevelUp();
+      } else {
+        showFloatingText("TIME UP...", player.pos, "#555");
+      }
+      updateUI();
+    }
+
+    function performLevelUp() {
+      if (state.level >= 1000) {
+        showFloatingText("MAX LEVEL!", player.pos, "#FFD700");
+        return;
+      }
+      state.level++;
+      
+      state.maxHp += 20;
+      state.playerHp = state.maxHp;
+      
+      if (soundManager) soundManager.play('powerup');
+      showFloatingText("LEVEL UP!", player.pos, "#FF1493");
+      setTimeout(() => showFloatingText("MAX HP UP!", player.pos, "#FF69B4"), 600);
+      setTimeout(() => showFloatingText("POWER UP!", player.pos, "#FF1493"), 1200);
+      
+      state.maxXp = state.level * 20;
+      state.currentXp = 0;
+      updateUI();
+    }
+
+    function checkSpawns() {
+      if (state.isBossActive) return;
+
+      if (state.enemies.filter(e => e.active).length < 5) {
+        if (Math.random() < 0.05) {
+          state.enemies.push(new Enemy(false));
+        }
+      }
+    }
+
+    // --- Action Buttons ---
+    document.getElementById('btn-action-shoot').addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      player.shoot();
+    }, { passive: false });
+
+    document.getElementById('btn-action-attack').addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      player.melee();
+    }, { passive: false });
+
+    document.getElementById('btn-action-jump').addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      player.jump();
+    }, { passive: false });
+
+    document.getElementById('btn-action-shoot').addEventListener('click', () => player.shoot());
+    document.getElementById('btn-action-attack').addEventListener('click', () => player.melee());
+    document.getElementById('btn-action-jump').addEventListener('click', () => player.jump());
+
+    // --- Input Handling ---
+    const joystickZone = document.getElementById('joystick-zone');
+    const joystickKnob = document.getElementById('joystick-knob');
+    let joystickId = null;
+    let joystickCenter = { x: 0, y: 0 };
+    let joystickVec = { x: 0, y: 0 };
+
+    const gameContainer = document.getElementById('game-container');
+    
+    gameContainer.addEventListener('touchstart', (e) => {
+      if (!state.isGameRunning) return;
+      if (e.target.tagName === 'BUTTON' || e.target.closest('.btn-action') || e.target.closest('.wiki-entry') || e.target.closest('#pass-modal') || e.target.closest('#start-screen')) return;
+
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        
+        if (joystickId === null) {
+          joystickId = t.identifier;
+          e.preventDefault();
+          
+          joystickCenter = { x: t.clientX, y: t.clientY };
+          
+          joystickZone.style.display = 'block';
+          joystickZone.style.left = `${t.clientX}px`;
+          joystickZone.style.top = `${t.clientY}px`;
+          joystickZone.style.transform = 'translate(-50%, -50%)';
+          
+          updateJoystickVisual(t.clientX, t.clientY);
+        }
+      }
+    }, { passive: false });
+
+    gameContainer.addEventListener('touchmove', (e) => {
+      if (!state.isGameRunning) return;
+      if (e.target.tagName === 'BUTTON' || e.target.closest('.btn-action') || e.target.closest('.wiki-entry') || e.target.closest('#pass-modal') || e.target.closest('#start-screen')) return;
+
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (t.identifier === joystickId) {
+          e.preventDefault();
+          updateJoystickVisual(t.clientX, t.clientY);
+        }
+      }
+    }, { passive: false });
+
+    gameContainer.addEventListener('touchend', (e) => {
+      if (!state.isGameRunning) return;
+      if (e.target.tagName === 'BUTTON' || e.target.closest('.btn-action') || e.target.closest('.wiki-entry') || e.target.closest('#pass-modal') || e.target.closest('#start-screen')) return;
+
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (t.identifier === joystickId) {
+          e.preventDefault();
+          joystickId = null;
+          joystickVec = { x: 0, y: 0 };
+          joystickKnob.style.transform = `translate(-50%, -50%)`;
+          joystickZone.style.display = 'none';
+          player.velocity.set(0, 0, 0);
+        }
+      }
+    }, { passive: false });
+
+    function updateJoystickVisual(clientX, clientY) {
+      const maxDist = 50;
+      let dx = clientX - joystickCenter.x;
+      let dy = clientY - joystickCenter.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      
+      if (dist > maxDist) {
+        const ratio = maxDist / dist;
+        dx *= ratio;
+        dy *= ratio;
+      }
+
+      joystickKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+      
+      const speed = SETTINGS.playerSpeed;
+      const normX = dx / maxDist;
+      const normY = dy / maxDist;
+      
+      player.velocity.set(normX * speed, 0, normY * speed);
+    }
+
+    function triggerGameOver() {
+      document.getElementById('game-over-overlay').style.display = 'flex';
+    }
+
+    document.getElementById('btn-retry').addEventListener('click', () => {
+      resetGame();
+    });
+
+    function resetGame() {
+      state.maxHp = SETTINGS.playerMaxHp;
+      state.playerHp = state.maxHp;
+      state.emeralds = 0;
+      state.diamonds = 0;
+      state.level = 1;
+      state.currentXp = 0;
+      state.maxXp = 20;
+      state.isBossActive = false;
+      
+      // Reset to World 1
+      loadWorld(1);
+      
+      player.pos.set(0,0,0);
+      player.invulnerable = 0;
+      document.getElementById('game-over-overlay').style.display = 'none';
+      document.getElementById('boss-timer-container').style.display = 'none';
+      updateUI();
+    }
+
+    // --- Save/Load System ---
+    const saveLoadModal = document.getElementById('save-load-modal');
+    const saveLoadTitle = document.getElementById('save-load-title');
+    const saveLoadDesc = document.getElementById('save-load-desc');
+    const saveLoadInput = document.getElementById('save-load-input');
+    const btnSaveLoadAction = document.getElementById('btn-save-load-action');
+    let isSaveMode = true;
+
+    function openSaveModal() {
+      isSaveMode = true;
+      saveLoadModal.style.display = 'flex';
+      saveLoadTitle.innerText = "SAVE DATA";
+      saveLoadDesc.innerText = "以下のコードをコピーして保存してください";
+      btnSaveLoadAction.innerText = "COPY";
+      
+      const saveData = {
+        emeralds: state.emeralds,
+        diamonds: state.diamonds,
+        paidDiamonds: state.paidDiamonds,
+        bossKillCount: state.bossKillCount,
+        enemyKillCount: state.enemyKillCount,
+        level: state.level,
+        charIndex: state.charIndex,
+        maxHp: state.maxHp,
+        playerHp: state.playerHp,
+        currentXp: state.currentXp,
+        maxXp: state.maxXp,
+        passLevel: state.passLevel,
+        passXp: state.passXp,
+        passMaxXp: state.passMaxXp,
+        relics: state.relics,
+        crates: state.crates,
+        isPassCharUnlocked: state.isPassCharUnlocked,
+        currentWorld: state.currentWorld
+      };
+      const code = btoa(JSON.stringify(saveData));
+      saveLoadInput.value = code;
+      saveLoadInput.select();
+    }
+
+    function openLoadModal() {
+      isSaveMode = false;
+      saveLoadModal.style.display = 'flex';
+      saveLoadTitle.innerText = "LOAD DATA";
+      saveLoadDesc.innerText = "セーブコードを貼り付けてください";
+      btnSaveLoadAction.innerText = "LOAD";
+      saveLoadInput.value = "";
+      saveLoadInput.focus();
+    }
+
+    document.getElementById('btn-save').addEventListener('click', openSaveModal);
+    document.getElementById('btn-load').addEventListener('click', openLoadModal);
+    document.getElementById('btn-start-load').addEventListener('click', openLoadModal);
+
+    document.getElementById('btn-save-load-close').addEventListener('click', () => {
+      saveLoadModal.style.display = 'none';
+    });
+
+    btnSaveLoadAction.addEventListener('click', () => {
+      if (isSaveMode) {
+        saveLoadInput.select();
+        document.execCommand('copy');
+        try {
+          navigator.clipboard.writeText(saveLoadInput.value);
+        } catch(e) {}
+        showNotification("コピーしました！");
+      } else {
+        const code = saveLoadInput.value.trim();
+        if (!code) return;
+        loadGameData(code);
+        saveLoadModal.style.display = 'none';
+      }
+    });
+
+    function loadGameData(code) {
+      try {
+        const data = JSON.parse(atob(code));
+        state.emeralds = data.emeralds || 0;
+        state.diamonds = data.diamonds || 0;
+        state.paidDiamonds = data.paidDiamonds || 0;
+        state.bossKillCount = data.bossKillCount || 0;
+        state.enemyKillCount = data.enemyKillCount || 0;
+        state.level = data.level || 1;
+        state.charIndex = data.charIndex || 0;
+        state.maxHp = data.maxHp || SETTINGS.playerMaxHp;
+        state.playerHp = data.playerHp || state.maxHp;
+        state.currentXp = data.currentXp || 0;
+        state.maxXp = data.maxXp || 20;
+        
+        state.passLevel = data.passLevel || 1;
+        state.passXp = data.passXp || 0;
+        state.passMaxXp = data.passMaxXp || 20;
+        state.isPassCharUnlocked = data.isPassCharUnlocked || false;
+        state.relics = data.relics || { owned: [], equipped: [] };
+        state.crates = data.crates || 0;
+        
+        const worldToLoad = data.currentWorld || 1;
+        loadWorld(worldToLoad);
+        
+        applyRelicBonuses();
+
+        updateUI();
+        player.updateTexture();
+        showNotification("ロード完了！ゲームを開始します。");
+        
+        if (!state.isGameRunning) {
+          document.getElementById('start-screen').style.display = 'none';
+          state.isGameRunning = true;
+          if (!soundManager) soundManager = new SoundManager();
+          soundManager.resume();
+        }
+      } catch (e) {
+        showNotification("無効なコードです");
+      }
+    }
+
+    // --- UI Logic ---
+    const btnBoss = document.getElementById('btn-boss');
+
+    function applyRelicBonuses() {
+      const relicBonus = getRelicBonuses();
+      state.maxHp = SETTINGS.playerMaxHp + (state.level - 1) * 20 + Math.floor(SETTINGS.playerMaxHp * relicBonus.hp / 100);
+    }
+
+    // Wiki Character Select Logic
+    const wikiModal = document.getElementById('wiki-modal');
+    const wikiList = document.getElementById('wiki-char-list');
+
+    function renderWikiList() {
+      wikiList.innerHTML = '';
+      CHAR_DATA.forEach((char, index) => {
+        const entry = document.createElement('div');
+        entry.className = 'wiki-entry';
+        if (index === state.charIndex) entry.classList.add('selected');
+        
+        let isLocked = false;
+        if (char.isLocked && !state.isPassCharUnlocked) {
+          isLocked = true;
+          entry.classList.add('locked');
+        }
+
+        const nameDisplay = isLocked ? "🔒 Locked" : char.name;
+        const descDisplay = isLocked ? "Reach Pass Lv.10 to unlock." : char.desc;
+        
+        entry.innerHTML = `
+          <div class="wiki-thumb">
+            <img src="${char.url}" alt="${char.name}" style="${isLocked ? 'filter: grayscale(100%); opacity: 0.5;' : ''}">
+          </div>
+          <div class="wiki-info">
+            <div class="wiki-name">${nameDisplay}</div>
+            <div class="wiki-desc">${descDisplay}</div>
+          </div>
+        `;
+        
+        if (!isLocked) {
+          entry.addEventListener('click', () => {
+            state.charIndex = index;
+            player.updateTexture();
+            wikiModal.style.display = 'none';
+            showFloatingText("CHARACTER CHANGED!", player.pos, "#9370DB");
+          });
+        }
+        
+        wikiList.appendChild(entry);
+      });
+    }
+
+    document.getElementById('btn-change-char').addEventListener('click', () => {
+      renderWikiList();
+      wikiModal.style.display = 'flex';
+    });
+
+    document.getElementById('btn-close-wiki').addEventListener('click', () => {
+      wikiModal.style.display = 'none';
+    });
+
+    // Shop Logic
+    const shopModal = document.getElementById('shop-modal');
+    document.getElementById('btn-shop').addEventListener('click', () => {
+      shopModal.style.display = 'flex';
+      updateUI();
+    });
+    document.getElementById('btn-close-shop').addEventListener('click', () => {
+      shopModal.style.display = 'none';
+    });
+    document.getElementById('btn-buy-level').addEventListener('click', () => {
+      if (state.paidDiamonds >= 1) {
+        state.paidDiamonds--;
+        performLevelUp();
+        showNotification("Level Up Purchased!");
+      } else {
+        showNotification("Not enough 👑 Premium Diamonds!");
+      }
+    });
+
+    // Pass Modal Logic
+    const passModal = document.getElementById('pass-modal');
+    document.getElementById('btn-pass').addEventListener('click', () => {
+      updatePassUI();
+      passModal.style.display = 'flex';
+    });
+    document.getElementById('btn-close-pass').addEventListener('click', () => {
+      passModal.style.display = 'none';
+    });
+
+    // Admin Logic
+    const adminModal = document.getElementById('admin-modal');
+    const passwordModal = document.getElementById('password-modal');
+    const passwordInput = document.getElementById('admin-password-input');
+
+    document.getElementById('btn-admin').addEventListener('click', () => {
+      passwordModal.style.display = 'flex';
+      passwordInput.value = '';
+      passwordInput.focus();
+    });
+
+    document.getElementById('btn-submit-password').addEventListener('click', () => {
+      if (passwordInput.value === "9307676") {
+        passwordModal.style.display = 'none';
+        adminModal.style.display = 'flex';
+      } else {
+        showNotification("Access Denied");
+        passwordInput.value = '';
+      }
+    });
+
+    document.getElementById('btn-cancel-password').addEventListener('click', () => {
+      passwordModal.style.display = 'none';
+    });
+
+    document.getElementById('btn-close-admin').addEventListener('click', () => {
+      adminModal.style.display = 'none';
+    });
+    document.getElementById('btn-admin-levelup').addEventListener('click', () => {
+      performLevelUp();
+      showNotification("Level Up Executed!");
+    });
+
+    document.getElementById('btn-admin-levelup-100').addEventListener('click', () => {
+      for(let i=0; i<100; i++) {
+        if (state.level >= 1000) break;
+        performLevelUp();
+      }
+      showNotification("Level Up +100 Executed!");
+    });
+
+    document.getElementById('btn-admin-event').addEventListener('click', () => {
+      state.forceEvent = !state.forceEvent;
+      showNotification(state.forceEvent ? "Event Forced START" : "Event Forced STOP");
+    });
+
+    document.getElementById('btn-admin-extend-event').addEventListener('click', () => {
+      const now = Date.now();
+      if (state.eventEndTime < now) {
+        state.eventEndTime = now + 5 * 60 * 1000;
+      } else {
+        state.eventEndTime += 5 * 60 * 1000;
+      }
+      showNotification("Event Extended by 5 Minutes!");
+    });
+
+    document.getElementById('btn-admin-add-gem').addEventListener('click', () => {
+      state.paidDiamonds += 10;
+      updateUI();
+      showNotification("Added 10 Premium Diamonds");
+    });
+
+    // Camera Switch
+    document.getElementById('btn-camera-switch').addEventListener('click', () => {
+      state.cameraMode = state.cameraMode === 'TPS' ? 'FPS' : 'TPS';
+      document.getElementById('btn-camera-switch').innerText = `🎥 VIEW: ${state.cameraMode}`;
+      
+      if (state.cameraMode === 'FPS') {
+        player.setVisible(false);
+      } else {
+        player.setVisible(true);
+      }
+    });
+
+    // Start Screen Logic
+    document.getElementById('btn-start').addEventListener('click', () => {
+      document.getElementById('start-screen').style.display = 'none';
+      state.isGameRunning = true;
+      if (!soundManager) soundManager = new SoundManager();
+      soundManager.resume();
+      loadWorld(1); // Initial load
+    });
+
+    document.getElementById('btn-online').addEventListener('click', () => {
+      const btn = document.getElementById('btn-online');
+      btn.innerText = "マッチング中...";
+      btn.disabled = true;
+      
+      setTimeout(() => {
+        if (Math.random() < 0.5) {
+          btn.innerText = "マッチング成功！";
+          setTimeout(() => {
+            document.getElementById('start-screen').style.display = 'none';
+            state.isGameRunning = true;
+            state.isCoopMode = true;
+            loadWorld(1);
+            spawnBuddy();
+            if (!soundManager) soundManager = new SoundManager();
+            soundManager.resume();
+            showFloatingText("CO-OP START!", player.pos, "#00BFFF");
+            
+            setTimeout(() => {
+              btn.innerText = "オンライン協力";
+              btn.disabled = false;
+            }, 1000);
+          }, 1000);
+        } else {
+          btn.innerText = "マッチング失敗... 誰もいません";
+          setTimeout(() => {
+            btn.innerText = "オンライン協力";
+            btn.disabled = false;
+          }, 2000);
+        }
+      }, 2000);
+    });
+
+    // Inventory Modal Logic
+    const inventoryModal = document.getElementById('inventory-modal');
+    document.getElementById('btn-inventory').addEventListener('click', () => {
+      inventoryModal.style.display = 'flex';
+    });
+    document.getElementById('btn-close-inventory').addEventListener('click', () => {
+      inventoryModal.style.display = 'none';
+    });
+    document.getElementById('btn-open-relic-equip').addEventListener('click', () => {
+      renderRelicList();
+      relicModal.style.display = 'flex';
+    });
+
+    // Relic Modal Logic
+    const relicModal = document.getElementById('relic-modal');
+    const relicList = document.getElementById('relic-list');
+    
+    function renderRelicList() {
+      relicList.innerHTML = '';
+      
+      if (state.relics.owned.length === 0) {
+        relicList.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">レリクスを持っていません<br>クレートから入手できます</div>';
+        document.getElementById('equipped-relic-list').innerText = 'なし';
+        return;
+      }
+      
+      if (state.relics.equipped.length > 0) {
+        const names = state.relics.equipped.map(id => {
+          const r = RELIC_DATA.find(d => d.id === id);
+          return r ? r.icon : '?';
+        }).join(' ');
+        document.getElementById('equipped-relic-list').innerText = names;
+      } else {
+        document.getElementById('equipped-relic-list').innerText = 'なし';
+      }
+      
+      state.relics.owned.forEach(relicId => {
+        const relic = RELIC_DATA.find(r => r.id === relicId);
+        if (!relic) return;
+        
+        const item = document.createElement('div');
+        item.className = 'relic-item';
+        if (state.relics.equipped.includes(relicId)) {
+          item.classList.add('equipped');
+        }
+        
+        item.innerHTML = `
+          <div class="relic-icon">${relic.icon}</div>
+          <div class="relic-info">
+            <div class="relic-name">${relic.name}</div>
+            <div class="relic-stats">パワー +${relic.powerBonus}% / HP +${relic.hpBonus}%</div>
+          </div>
+          <span class="relic-rarity" style="background: ${relic.rarityColor};">${relic.rarity.toUpperCase()}</span>
+        `;
+        
+        item.addEventListener('click', () => {
+          const index = state.relics.equipped.indexOf(relicId);
+          if (index !== -1) {
+            state.relics.equipped.splice(index, 1);
+            showNotification("レリクスを外しました");
+          } else {
+            if (state.relics.equipped.length >= 3) {
+              showNotification("最大3つまでしか装備できません");
+              return;
+            }
+            state.relics.equipped.push(relicId);
+            showNotification(`${relic.name}を装備しました！`);
+          }
+          applyRelicBonuses();
+          updateUI();
+          renderRelicList();
+        });
+        
+        relicList.appendChild(item);
+      });
+    }
+    
+    document.getElementById('btn-close-relic').addEventListener('click', () => {
+      relicModal.style.display = 'none';
+    });
+    
+    // Crate System
+    const crateModal = document.getElementById('crate-modal');
+    const crateAnimation = document.getElementById('crate-animation');
+    const crateResult = document.getElementById('crate-result');
+    
+    document.getElementById('btn-crate').addEventListener('click', () => {
+      if (state.crates <= 0) {
+        showNotification("クレートがありません！ダイヤイベント中に入手できます");
+        return;
+      }
+      
+      openCrate();
+    });
+    
+    document.getElementById('btn-crate-close').addEventListener('click', () => {
+      crateModal.style.display = 'none';
+    });
+    
+    function openCrate() {
+      state.crates--;
+      updateUI();
+      
+      crateModal.style.display = 'flex';
+      crateAnimation.style.display = 'flex';
+      crateResult.style.display = 'none';
+      
+      if (soundManager) soundManager.play('crate');
+      
+      setTimeout(() => {
+        const totalWeight = RELIC_DATA.reduce((sum, r) => sum + r.dropRate, 0);
+        let random = Math.random() * totalWeight;
+        let selectedRelic = RELIC_DATA[0];
+        
+        for (const relic of RELIC_DATA) {
+          random -= relic.dropRate;
+          if (random <= 0) {
+            selectedRelic = relic;
+            break;
+          }
+        }
+        
+        if (!state.relics.owned.includes(selectedRelic.id)) {
+          state.relics.owned.push(selectedRelic.id);
+        }
+        
+        crateAnimation.style.display = 'none';
+        crateResult.style.display = 'flex';
+        
+        document.getElementById('crate-result-rarity').innerText = `【${selectedRelic.rarity.toUpperCase()}】`;
+        document.getElementById('crate-result-rarity').style.color = selectedRelic.rarityColor;
+        document.getElementById('crate-result-name').innerText = `${selectedRelic.icon} ${selectedRelic.name}`;
+        document.getElementById('crate-result-stats').innerText = `パワー +${selectedRelic.powerBonus}% / HP +${selectedRelic.hpBonus}%`;
+        
+        if (soundManager) soundManager.play('powerup');
+      }, 1500);
+    }
+
+    btnBoss.addEventListener('click', () => {
+      startBossFight();
+    });
+
+    function updateUI() {
+      document.getElementById('crate-count-display').innerText = `x${state.crates}`;
+      document.getElementById('emerald-display').innerText = state.emeralds;
+      document.getElementById('diamond-display').innerText = state.diamonds;
+      document.getElementById('paid-diamond-display').innerText = state.paidDiamonds;
+      if (state.level > 1000) {
+        document.getElementById('level-display').innerText = "MAX";
+      } else {
+        document.getElementById('level-display').innerText = state.level;
+      }
+      
+      const hpPct = (state.playerHp / state.maxHp) * 100;
+      document.getElementById('hp-bar').style.width = `${hpPct}%`;
+
+      const xpPct = Math.min(100, (state.currentXp / state.maxXp) * 100);
+      document.getElementById('exp-bar').style.width = `${xpPct}%`;
+      document.getElementById('exp-text').innerText = `${state.currentXp} / ${state.maxXp}`;
+
+      if (!state.isBossActive && state.currentXp >= state.maxXp) {
+        btnBoss.style.display = 'flex';
+      } else {
+        btnBoss.style.display = 'none';
+      }
+    }
+
+    function showFloatingText(text, pos, color) {
+      const div = document.createElement('div');
+      div.className = 'floating-text';
+      div.innerText = text;
+      div.style.color = color;
+      
+      const vec = pos.clone();
+      vec.project(camera);
+      
+      const x = (vec.x * .5 + .5) * window.innerWidth;
+      const y = (-(vec.y * .5) + .5) * window.innerHeight;
+      
+      div.style.left = `${x}px`;
+      div.style.top = `${y}px`;
+      
+      document.body.appendChild(div);
+      setTimeout(() => div.remove(), 1000);
+    }
+
+    function showNotification(text) {
+      const toast = document.getElementById('notification-toast');
+      toast.innerText = text;
+      toast.style.display = 'block';
+      setTimeout(() => {
+        toast.style.display = 'none';
+      }, 3000);
+    }
+
+    function checkPlayerCollisions() {
+      if (state.playerHp <= 0) return;
+
+      state.enemies.forEach(enemy => {
+        if (!enemy.active) return;
+        const dist = player.pos.distanceTo(enemy.mesh.position);
+        if (dist < 1.5) {
+          let damage = 10;
+          if (state.currentWorld === 2) damage = 100; // Harder in World 2
+          player.takeDamage(damage);
+          
+          const dir = new THREE.Vector3().subVectors(player.pos, enemy.mesh.position).normalize();
+          player.pos.add(dir.multiplyScalar(3));
+        }
+      });
+    }
+
+    // --- Main Loop ---
+    function animate(time) {
+      requestAnimationFrame(animate);
+      
+      if (!state.isGameRunning) {
+        const angle = time * 0.0005;
+        camera.position.x = Math.sin(angle) * SETTINGS.cameraDistance;
+        camera.position.z = Math.cos(angle) * SETTINGS.cameraDistance;
+        camera.position.y = SETTINGS.cameraHeight;
+        camera.lookAt(0, 0, 0);
+        renderer.render(scene, camera);
+        state.lastTime = time;
+        return;
+      }
+
+      if (state.playerHp <= 0) return;
+
+      const dt = (time - state.lastTime) / 1000;
+      state.lastTime = time;
+
+      player.update(dt);
+
+      if (state.isCoopMode && state.buddy) {
+        state.buddy.update(dt, player.pos);
+      }
+      
+      checkPlayerCollisions();
+
+      state.enemies.forEach(e => e.update(player.pos));
+      
+      state.projectiles = state.projectiles.filter(p => {
+        p.update();
+        return p.active;
+      });
+
+      state.items = state.items.filter(i => {
+        i.update(player.pos);
+        return i.active;
+      });
+
+      gates.forEach(g => g.update(player.pos));
+
+      for (let i = state.particles.length - 1; i >= 0; i--) {
+        const p = state.particles[i];
+        p.life -= dt * 2;
+        p.mesh.position.add(p.vel);
+        p.mesh.rotation.x += 0.1;
+        p.mesh.scale.setScalar(p.life);
+        if (p.life <= 0) {
+          scene.remove(p.mesh);
+          state.particles.splice(i, 1);
+        }
+      }
+
+      checkDiamondEvent();
+
+      if (state.isBossActive) {
+        state.bossTimer -= dt;
+        
+        const pct = Math.max(0, (state.bossTimer / SETTINGS.bossTimeLimit) * 100);
+        document.getElementById('boss-timer-bar').style.width = `${pct}%`;
+        document.getElementById('boss-timer-text').innerText = `TIME: ${Math.ceil(state.bossTimer)}`;
+
+        if (state.bossTimer <= 0) {
+          completeBossFight(false);
+        }
+      } else {
+        checkSpawns();
+      }
+
+      if (state.cameraMode === 'TPS') {
+        const targetX = player.pos.x;
+        const targetZ = player.pos.z + SETTINGS.cameraDistance;
+        camera.position.x += (targetX - camera.position.x) * 0.1;
+        camera.position.z += (targetZ - camera.position.z) * 0.1;
+        camera.position.y = SETTINGS.cameraHeight;
+        camera.lookAt(player.pos.x, 1, player.pos.z);
+      } else {
+        camera.position.copy(player.pos).add(new THREE.Vector3(0, 2, 0));
+        const lookTarget = player.pos.clone().add(player.facingDir.clone().multiplyScalar(10));
+        camera.lookAt(lookTarget.x, 2, lookTarget.z);
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    updateUI();
+    requestAnimationFrame(animate);
+
+    window.addEventListener('resize', () => {
+      const aspect = window.innerWidth / window.innerHeight;
+      camera.aspect = aspect;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+  </script>
+</body>
+</html>
